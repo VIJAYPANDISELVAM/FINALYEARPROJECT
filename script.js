@@ -1,6 +1,6 @@
 /* ===============================
-   CRONOS v3.0 - Frontend Script
-   Corrected: global bindings + safe init
+   CRONOS v3.2.1 – Frontend Script
+   Render + Vercel Connected
 =============================== */
 
 /* ===============================
@@ -11,12 +11,10 @@ let lastReportId = null;
 let currentMode = null;
 
 /* ===============================
-   API BASE
+   🔴 BACKEND API (RENDER)
+   CHANGE THIS ONLY IF RENDER URL CHANGES
 =============================== */
-const API_BASE =
-  window.location.hostname === "localhost"
-    ? "http://localhost:5080"
-    : "https://finalyearproject-2-z1uu.onrender.com";
+const API_BASE = "https://finalyearproject-3-n6x.onrender.com";
 
 /* ===============================
    SAFE ELEMENT GETTER
@@ -45,33 +43,27 @@ function autoResize(elm) {
 function selectMode(mode) {
   currentMode = mode;
 
-  el("modeSelectionPanel")?.style && (el("modeSelectionPanel").style.display = "none");
-  el("analysisForm")?.style && (el("analysisForm").style.display = "block");
+  el("modeSelectionPanel").style.display = "none";
+  el("analysisForm").style.display = "block";
 
   if (mode === "COMPLIANCE") {
-    el("oldConditionPanel")?.style && (el("oldConditionPanel").style.display = "none");
-    el("newConditionPanel")?.style && (el("newConditionPanel").style.display = "none");
+    el("oldConditionPanel").style.display = "none";
+    el("newConditionPanel").style.display = "none";
 
-    el("expectedOutputBadge") && (el("expectedOutputBadge").textContent = "02");
-    el("constraintsBadge") && (el("constraintsBadge").textContent = "03");
-
-    el("expectedOutputHint") &&
-      (el("expectedOutputHint").textContent =
-        "Describe the expected behavior (contract)");
-
-    el("analyzeBtnText") && (el("analyzeBtnText").textContent = "Check Compliance");
+    el("expectedOutputBadge").textContent = "02";
+    el("constraintsBadge").textContent = "03";
+    el("expectedOutputHint").textContent =
+      "Describe the expected behavior (contract)";
+    el("analyzeBtnText").textContent = "Check Compliance";
   } else {
-    el("oldConditionPanel")?.style && (el("oldConditionPanel").style.display = "block");
-    el("newConditionPanel")?.style && (el("newConditionPanel").style.display = "block");
+    el("oldConditionPanel").style.display = "block";
+    el("newConditionPanel").style.display = "block";
 
-    el("expectedOutputBadge") && (el("expectedOutputBadge").textContent = "04");
-    el("constraintsBadge") && (el("constraintsBadge").textContent = "05");
-
-    el("expectedOutputHint") &&
-      (el("expectedOutputHint").textContent =
-        "Describe expected behavior after change");
-
-    el("analyzeBtnText") && (el("analyzeBtnText").textContent = "Analyze Change");
+    el("expectedOutputBadge").textContent = "04";
+    el("constraintsBadge").textContent = "05";
+    el("expectedOutputHint").textContent =
+      "Describe expected behavior after change";
+    el("analyzeBtnText").textContent = "Analyze Change";
   }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -83,33 +75,27 @@ function selectMode(mode) {
 function goBackToModeSelection() {
   currentMode = null;
 
-  el("modeSelectionPanel")?.style && (el("modeSelectionPanel").style.display = "block");
-  el("analysisForm")?.style && (el("analysisForm").style.display = "none");
+  el("modeSelectionPanel").style.display = "block";
+  el("analysisForm").style.display = "none";
 
-  const resultBox = el("resultBox");
-  if (resultBox) {
-    resultBox.className = "result-box";
-    resultBox.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🎯</div>
-        <p>Click "Analyze" to see output here.</p>
-        <span class="empty-hint">Your analysis results will appear in this section</span>
-      </div>
-    `;
-  }
+  const box = el("resultBox");
+  box.className = "result-box";
+  box.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🎯</div>
+      <p>Click "Analyze" to see output here.</p>
+    </div>
+  `;
 
   ["sourceCode", "oldCondition", "newCondition", "expectedOutput"].forEach(id => {
-    const t = el(id);
-    if (t) {
-      t.value = "";
-      autoResize(t);
+    if (el(id)) {
+      el(id).value = "";
+      autoResize(el(id));
     }
   });
 
-  el("noBehaviorChange") && (el("noBehaviorChange").checked = false);
-  el("allowBoundaryChange") && (el("allowBoundaryChange").checked = false);
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  el("noBehaviorChange").checked = false;
+  el("allowBoundaryChange").checked = false;
 }
 
 /* ===============================
@@ -131,7 +117,6 @@ function setupCollapse() {
 =============================== */
 function renderResult(result) {
   const box = el("resultBox");
-  if (!box) return;
 
   box.className =
     "result-box " +
@@ -141,69 +126,25 @@ function renderResult(result) {
       ? "result-fail"
       : "result-error");
 
-  let complianceExtras = "";
-
-  // ✅ Compliance-only AI solution block
-  if (result.mode === "COMPLIANCE" && result.ai_solution) {
-    complianceExtras += `
-      <section class="result-section">
-        <h4>🛠 AI Suggested Solution</h4>
-        <pre>${escapeHtml(result.ai_solution)}</pre>
-      </section>
-    `;
-  }
-
   box.innerHTML = `
     <div class="result-header">
-      <h3>🧠 Analysis Report (${result.mode})</h3>
+      <h3>🧠 Analysis Report</h3>
       <button class="collapse-btn" data-collapse>Collapse</button>
     </div>
 
     <div id="collapsibleContent" class="collapsible-content">
-
-      <section class="result-section">
-        <strong>Status:</strong> ${result.status}<br/>
-        <strong>Risk Score:</strong> ${result.risk_score}
-      </section>
-
-      <section class="result-section">
-        <h4>🔍 Technical Explanation</h4>
-        <pre>${escapeHtml(result.technical_explanation || "N/A")}</pre>
-      </section>
-
-      ${
-        result.mode === "CHANGE"
-          ? `
-        <section class="result-section">
-          <h4>🧑 Human Explanation</h4>
-          <pre>${escapeHtml(result.human_explanation || "N/A")}</pre>
-        </section>
-        `
-          : ""
-      }
-
-      ${complianceExtras}
-
-      <section class="result-section">
-        <h4>📎 Metadata</h4>
-        <pre>
-Report ID: ${result.report_id}
-Timestamp: ${result.timestamp}
-AI Provider: ${result.ai_provider}
-        </pre>
-      </section>
-
+      <pre>${JSON.stringify(result, null, 2)}</pre>
     </div>
   `;
 
   setupCollapse();
 
-  // ✅ enable downloads ONLY after success
   el("downloadJsonBtn").style.display = "inline-flex";
   el("downloadPdfBtn").style.display = "inline-flex";
 
   box.scrollIntoView({ behavior: "smooth" });
 }
+
 /* ===============================
    ANALYZE
 =============================== */
@@ -233,6 +174,11 @@ async function analyzeChange() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
+
+  if (!res.ok) {
+    alert("Backend error. Check Render logs.");
+    return;
+  }
 
   const data = await res.json();
   lastAnalysisResult = data;
@@ -271,14 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* ===============================
-   🔴 REQUIRED GLOBAL EXPORTS
+   GLOBAL EXPORTS
 =============================== */
 window.selectMode = selectMode;
 window.goBackToModeSelection = goBackToModeSelection;
-function escapeHtml(text) {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
