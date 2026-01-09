@@ -13,7 +13,10 @@ let currentMode = null;
 /* ===============================
    API BASE
 =============================== */
-const API_BASE = window.location.origin;
+const API_BASE =
+  window.location.hostname === "localhost"
+    ? "http://localhost:5080"
+    : "https://finalyearproject-2-z1uu.onrender.com";
 
 /* ===============================
    SAFE ELEMENT GETTER
