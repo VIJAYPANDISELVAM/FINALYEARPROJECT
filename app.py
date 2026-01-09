@@ -8,20 +8,18 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-import os, json, ast, hashlib, uuid, time, re, requests
+import os, json, ast, hashlib, uuid, re, requests
 from datetime import datetime
 from typing import List, Dict, Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
 from google import genai
-
 
 # ===============================
 # API KEYS
@@ -32,11 +30,13 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 OPENROUTER_ENABLED = bool(OPENROUTER_API_KEY)
 
-
 # ===============================
-# APP SETUP
+# APP SETUP (API ONLY)
 # ===============================
-app = FastAPI(title="CRONOS – Dual Mode Code Analyzer", version="3.2.0")
+app = FastAPI(
+    title="CRONOS – Dual Mode Code Analyzer",
+    version="3.2.1"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,19 +46,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/ui", StaticFiles(directory="ui"), name="ui")
-
-@app.get("/", response_class=HTMLResponse)
-def serve_ui():
-    return FileResponse("ui/index.html")
-
-
 # ===============================
 # STORAGE
 # ===============================
 REPORT_DIR = "reports"
 os.makedirs(REPORT_DIR, exist_ok=True)
-
 
 # ===============================
 # MODELS
@@ -67,13 +59,11 @@ class Constraint(BaseModel):
     no_behavior_change: bool = False
     allow_boundary_change: bool = False
 
-
 class AnalyzerResult(BaseModel):
     name: str
     findings: List[str]
     risk: int
     details: Dict[str, Any] = {}
-
 
 # ===============================
 # AST HELPERS
@@ -84,10 +74,8 @@ def safe_ast(code: str):
     except Exception as e:
         raise ValueError(str(e))
 
-
 def hash_source(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
-
 
 # ===============================
 # CHANGE MODE ANALYZER
@@ -104,7 +92,6 @@ class ChangeAnalyzer:
                 risk=30
             )
         ], 30, {"semantic_diff": True}
-
 
 # ===============================
 # COMPLIANCE ANALYZER
@@ -136,7 +123,6 @@ class ComplianceAnalyzer:
             "source_hash": src_hash
         }
 
-
 # ===============================
 # AI CALLS
 # ===============================
@@ -149,7 +135,6 @@ def call_gemini(prompt: str):
         contents=prompt
     )
     return r.text.strip(), "Gemini"
-
 
 def call_openrouter(prompt: str):
     r = requests.post(
@@ -169,15 +154,15 @@ def call_openrouter(prompt: str):
     data = r.json()
     return data["choices"][0]["message"]["content"], "OpenRouter"
 
-
 def ai(prompt: str):
     if gemini_client:
         try:
             return call_gemini(prompt)
         except Exception:
             pass
-    return call_openrouter(prompt)
-
+    if OPENROUTER_ENABLED:
+        return call_openrouter(prompt)
+    raise Exception("No AI provider configured")
 
 # ===============================
 # AI PROMPTS
@@ -191,29 +176,27 @@ Findings: {findings}
 Explain the technical reasoning without mentioning source code.
 """
 
-
 def human_prompt(findings):
     return f"""
 Findings: {findings}
 
-Explain impact in simple human terms.
+Explain the impact in clear, human-readable language.
 """
-
 
 def compliance_solution_prompt(hash_code, expected):
     return f"""
 Source Hash: {hash_code}
 Expected Contract: {expected}
 
-Suggest a high-level fix without code or assumptions.
+Suggest a high-level corrective approach.
+No code. No assumptions.
 """
-
 
 # ===============================
 # ANALYZE ENDPOINT
 # ===============================
 @app.post("/analyze")
-def analyze(req: dict):
+def analyze(req: Dict[str, Any]):
     mode = req.get("mode", "").upper()
     report_id = str(uuid.uuid4())
 
@@ -276,7 +259,6 @@ def analyze(req: dict):
 
     return result
 
-
 # ===============================
 # DOWNLOAD JSON
 # ===============================
@@ -286,7 +268,6 @@ def download_json(report_id: str):
     if not os.path.exists(path):
         raise HTTPException(404, "Report not found")
     return FileResponse(path, media_type="application/json", filename=f"{report_id}.json")
-
 
 # ===============================
 # DOWNLOAD PDF
