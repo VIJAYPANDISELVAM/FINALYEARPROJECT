@@ -5,129 +5,76 @@
 /* ===============================
    CRONOS v3.2.1 – Frontend Script
 =============================== */
+/* ==================================================
+   CRONOS v3.2.1 — STABLE FRONTEND SCRIPT
+   GUARANTEED BUTTON FUNCTIONALITY
+================================================== */
 
-/* ===============================
-   GLOBAL STATE
-=============================== */
-let lastAnalysisResult = null;
-let lastReportId = null;
-let currentMode = null;
+/* ---------------- GLOBAL STATE ---------------- */
+var lastAnalysisResult = null;
+var lastReportId = null;
+var currentMode = null;
 
-/* ===============================
-   BACKEND API (RENDER)
-=============================== */
-const API_BASE = "https://finalyearproject-3-n6x.onrender.com";
+/* ---------------- BACKEND ---------------- */
+var API_BASE = "https://finalyearproject-3-n6x.onrender.com";
 
-/* ===============================
-   SAFE ELEMENT GETTER
-=============================== */
+/* ---------------- HELPERS ---------------- */
 function el(id) {
-  const e = document.getElementById(id);
-  if (!e) console.warn(`⚠️ Missing element: ${id}`);
-  return e;
+  return document.getElementById(id);
 }
 
-/* ===============================
-   AUTO-RESIZE TEXTAREAS
-=============================== */
-function autoResize(elm) {
-  if (!elm) return;
-  elm.style.height = "auto";
-  elm.style.height = Math.max(elm.scrollHeight, 120) + "px";
+function autoResize(t) {
+  if (!t) return;
+  t.style.height = "auto";
+  t.style.height = Math.max(t.scrollHeight, 120) + "px";
 }
 
-/* ===============================
-   MODE SELECTION
-=============================== */
+/* ---------------- MODE SELECTION ---------------- */
 function selectMode(mode) {
   currentMode = mode;
 
-  if (el("modeSelectionPanel")) el("modeSelectionPanel").style.display = "none";
-  if (el("analysisForm")) el("analysisForm").style.display = "block";
+  el("modeSelectionPanel").style.display = "none";
+  el("analysisForm").style.display = "block";
 
   if (mode === "COMPLIANCE") {
-    el("oldConditionPanel") && (el("oldConditionPanel").style.display = "none");
-    el("newConditionPanel") && (el("newConditionPanel").style.display = "none");
-
-    el("expectedOutputBadge") && (el("expectedOutputBadge").textContent = "02");
-    el("constraintsBadge") && (el("constraintsBadge").textContent = "03");
-
-    el("expectedOutputHint") &&
-      (el("expectedOutputHint").textContent =
-        "Describe the expected behavior (contract)");
-
-    el("analyzeBtnText") &&
-      (el("analyzeBtnText").textContent = "Check Compliance");
+    el("oldConditionPanel").style.display = "none";
+    el("newConditionPanel").style.display = "none";
+    el("expectedOutputBadge").innerText = "02";
+    el("constraintsBadge").innerText = "03";
+    el("expectedOutputHint").innerText =
+      "Describe the expected behavior (contract)";
+    el("analyzeBtnText").innerText = "Check Compliance";
   } else {
-    el("oldConditionPanel") && (el("oldConditionPanel").style.display = "block");
-    el("newConditionPanel") && (el("newConditionPanel").style.display = "block");
-
-    el("expectedOutputBadge") && (el("expectedOutputBadge").textContent = "04");
-    el("constraintsBadge") && (el("constraintsBadge").textContent = "05");
-
-    el("expectedOutputHint") &&
-      (el("expectedOutputHint").textContent =
-        "Describe expected behavior after change");
-
-    el("analyzeBtnText") &&
-      (el("analyzeBtnText").textContent = "Analyze Change");
+    el("oldConditionPanel").style.display = "block";
+    el("newConditionPanel").style.display = "block";
+    el("expectedOutputBadge").innerText = "04";
+    el("constraintsBadge").innerText = "05";
+    el("expectedOutputHint").innerText =
+      "Describe expected behavior after change";
+    el("analyzeBtnText").innerText = "Analyze Change";
   }
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-/* ===============================
-   BACK TO MODE SELECTION
-=============================== */
+/* ---------------- BACK ---------------- */
 function goBackToModeSelection() {
   currentMode = null;
+  el("modeSelectionPanel").style.display = "block";
+  el("analysisForm").style.display = "none";
 
-  el("modeSelectionPanel") && (el("modeSelectionPanel").style.display = "block");
-  el("analysisForm") && (el("analysisForm").style.display = "none");
-
-  const box = el("resultBox");
-  if (box) {
-    box.className = "result-box";
-    box.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🎯</div>
-        <p>Click "Analyze" to see output here.</p>
-      </div>
-    `;
-  }
-
-  ["sourceCode", "oldCondition", "newCondition", "expectedOutput"].forEach(id => {
-    const t = el(id);
-    if (t) {
-      t.value = "";
-      autoResize(t);
-    }
-  });
-
-  el("noBehaviorChange") && (el("noBehaviorChange").checked = false);
-  el("allowBoundaryChange") && (el("allowBoundaryChange").checked = false);
+  el("resultBox").innerHTML =
+    "<div class='empty-state'><p>Click Analyze</p></div>";
 }
 
-/* ===============================
-   COLLAPSE HANDLER
-=============================== */
-function setupCollapse() {
-  const btn = document.querySelector("[data-collapse]");
-  const content = el("collapsibleContent");
-  if (!btn || !content) return;
-
-  btn.onclick = () => {
-    const collapsed = content.classList.toggle("collapsed");
-    btn.textContent = collapsed ? "Expand" : "Collapse";
-  };
+/* ---------------- COLLAPSE ---------------- */
+function toggleCollapse() {
+  var content = el("collapsibleContent");
+  if (!content) return;
+  content.classList.toggle("collapsed");
 }
 
-/* ===============================
-   RENDER RESULT
-=============================== */
+/* ---------------- RENDER RESULT ---------------- */
 function renderResult(result) {
-  const box = el("resultBox");
-  if (!box) return;
+  var box = el("resultBox");
 
   box.className =
     "result-box " +
@@ -139,101 +86,90 @@ function renderResult(result) {
 
   box.innerHTML = `
     <div class="result-header">
-      <h3>🧠 Analysis Report</h3>
-      <button class="collapse-btn" data-collapse>Collapse</button>
+      <h3>Analysis Report</h3>
+      <button onclick="toggleCollapse()">Collapse</button>
     </div>
-    <div id="collapsibleContent" class="collapsible-content">
+    <div id="collapsibleContent">
       <pre>${JSON.stringify(result, null, 2)}</pre>
     </div>
   `;
 
-  setupCollapse();
-
-  el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
-  el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "inline-flex");
-
-  box.scrollIntoView({ behavior: "smooth" });
+  el("downloadJsonBtn").style.display = "inline-block";
+  el("downloadPdfBtn").style.display = "inline-block";
 }
 
-/* ===============================
-   ANALYZE
-=============================== */
-async function analyzeChange() {
+/* ---------------- ANALYZE ---------------- */
+function analyzeChange() {
   if (!currentMode) {
     alert("Select a mode first");
     return;
   }
 
-  const payload = {
+  var payload = {
     mode: currentMode,
-    source_code: el("sourceCode")?.value || "",
-    expected_output: el("expectedOutput")?.value || "",
+    source_code: el("sourceCode").value,
+    expected_output: el("expectedOutput").value,
     constraints: {
-      no_behavior_change: el("noBehaviorChange")?.checked || false,
-      allow_boundary_change: el("allowBoundaryChange")?.checked || false
+      no_behavior_change: el("noBehaviorChange").checked,
+      allow_boundary_change: el("allowBoundaryChange").checked
     }
   };
 
   if (currentMode === "CHANGE") {
-    payload.old_condition = el("oldCondition")?.value || "";
-    payload.new_condition = el("newCondition")?.value || "";
+    payload.old_condition = el("oldCondition").value;
+    payload.new_condition = el("newCondition").value;
   }
 
-  try {
-    const res = await fetch(`${API_BASE}/analyze`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+  fetch(API_BASE + "/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  })
+    .then(r => r.json())
+    .then(data => {
+      lastAnalysisResult = data;
+      lastReportId = data.report_id;
+      renderResult(data);
+    })
+    .catch(err => {
+      alert("Backend error");
+      console.error(err);
     });
-
-    if (!res.ok) {
-      const t = await res.text();
-      alert("Backend error:\n" + t);
-      return;
-    }
-
-    const data = await res.json();
-    lastAnalysisResult = data;
-    lastReportId = data.report_id;
-
-    renderResult(data);
-  } catch (err) {
-    alert("Network error. Backend may be sleeping.");
-    console.error(err);
-  }
 }
 
-/* ===============================
-   DOWNLOADS
-=============================== */
+/* ---------------- DOWNLOADS ---------------- */
 function downloadJSON() {
-  if (!lastReportId) return alert("Run analysis first");
-  window.open(`${API_BASE}/report/json/${lastReportId}`, "_blank");
+  if (!lastReportId) {
+    alert("Run analysis first");
+    return;
+  }
+  window.open(API_BASE + "/report/json/" + lastReportId);
 }
 
 function downloadPDF() {
-  if (!lastReportId) return alert("Run analysis first");
-  window.open(`${API_BASE}/report/pdf/${lastReportId}`, "_blank");
+  if (!lastReportId) {
+    alert("Run analysis first");
+    return;
+  }
+  window.open(API_BASE + "/report/pdf/" + lastReportId);
 }
 
-/* ===============================
-   INIT
-=============================== */
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("✅ CRONOS Frontend Initialized");
+/* ---------------- INIT ---------------- */
+window.onload = function () {
+  console.log("CRONOS READY");
 
-  el("analyzeBtn")?.addEventListener("click", analyzeChange);
-  el("downloadJsonBtn")?.addEventListener("click", downloadJSON);
-  el("downloadPdfBtn")?.addEventListener("click", downloadPDF);
+  var areas = document.getElementsByTagName("textarea");
+  for (var i = 0; i < areas.length; i++) {
+    autoResize(areas[i]);
+    areas[i].addEventListener("input", function () {
+      autoResize(this);
+    });
+  }
+};
 
-  document.querySelectorAll("textarea").forEach(t => {
-    autoResize(t);
-    t.addEventListener("input", () => autoResize(t));
-  });
-});
-
-/* ===============================
-   GLOBAL EXPORTS
-=============================== */
+/* ---------------- EXPORTS ---------------- */
 window.selectMode = selectMode;
 window.goBackToModeSelection = goBackToModeSelection;
+window.analyzeChange = analyzeChange;
+window.downloadJSON = downloadJSON;
+window.downloadPDF = downloadPDF;
