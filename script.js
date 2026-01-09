@@ -2,6 +2,9 @@
    CRONOS v3.2.1 – Frontend Script
    Render + Vercel Connected (STABLE)
 =============================== */
+/* ===============================
+   CRONOS v3.2.1 – Frontend Script
+=============================== */
 
 /* ===============================
    GLOBAL STATE
@@ -47,10 +50,12 @@ function selectMode(mode) {
     el("newConditionPanel") && (el("newConditionPanel").style.display = "none");
 
     el("expectedOutputBadge") && (el("expectedOutputBadge").textContent = "02");
-    el("constraintsBadge") && (el("constraintsBadge").textContent =igger. = "03");
+    el("constraintsBadge") && (el("constraintsBadge").textContent = "03");
+
     el("expectedOutputHint") &&
       (el("expectedOutputHint").textContent =
         "Describe the expected behavior (contract)");
+
     el("analyzeBtnText") &&
       (el("analyzeBtnText").textContent = "Check Compliance");
   } else {
@@ -59,9 +64,11 @@ function selectMode(mode) {
 
     el("expectedOutputBadge") && (el("expectedOutputBadge").textContent = "04");
     el("constraintsBadge") && (el("constraintsBadge").textContent = "05");
+
     el("expectedOutputHint") &&
       (el("expectedOutputHint").textContent =
         "Describe expected behavior after change");
+
     el("analyzeBtnText") &&
       (el("analyzeBtnText").textContent = "Analyze Change");
   }
@@ -149,7 +156,7 @@ function renderResult(result) {
 }
 
 /* ===============================
-   ANALYZE (HARDENED)
+   ANALYZE
 =============================== */
 async function analyzeChange() {
   if (!currentMode) {
@@ -180,8 +187,8 @@ async function analyzeChange() {
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      alert("Backend error:\n" + text);
+      const t = await res.text();
+      alert("Backend error:\n" + t);
       return;
     }
 
@@ -191,7 +198,7 @@ async function analyzeChange() {
 
     renderResult(data);
   } catch (err) {
-    alert("Network error. Render may be sleeping.");
+    alert("Network error. Backend may be sleeping.");
     console.error(err);
   }
 }
