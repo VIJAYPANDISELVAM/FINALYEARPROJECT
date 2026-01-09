@@ -4,4 +4,4 @@ python-dotenv
 pydantic
 requests
 reportlab
-google-generativeai
+google-genai
