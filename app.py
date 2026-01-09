@@ -4,11 +4,10 @@
 # Change Mode + Compliance Mode
 # JSON + PDF + AI (Gemini/OpenRouter)
 # ===============================
-
 from dotenv import load_dotenv
 load_dotenv()
 
-import os, json, ast, hashlib, uuid, re, requests
+import os, json, ast, hashlib, uuid, requests
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -35,16 +34,25 @@ OPENROUTER_ENABLED = bool(OPENROUTER_API_KEY)
 # ===============================
 app = FastAPI(
     title="CRONOS – Dual Mode Code Analyzer",
-    version="3.2.1"
+    version="3.2.2"
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Vercel safe
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 🔴 IMPORTANT: Root health endpoint (FIXES 404 CONFUSION)
+@app.get("/")
+def health():
+    return {
+        "status": "ok",
+        "service": "CRONOS API",
+        "endpoints": ["/analyze", "/report/json/{id}", "/report/pdf/{id}"]
+    }
 
 # ===============================
 # STORAGE
@@ -66,7 +74,7 @@ class AnalyzerResult(BaseModel):
     details: Dict[str, Any] = {}
 
 # ===============================
-# AST HELPERS
+# HELPERS
 # ===============================
 def safe_ast(code: str):
     try:
@@ -78,7 +86,7 @@ def hash_source(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 # ===============================
-# CHANGE MODE ANALYZER
+# CHANGE ANALYZER
 # ===============================
 class ChangeAnalyzer:
     def analyze(self, old: str, new: str):
@@ -101,15 +109,12 @@ class ComplianceAnalyzer:
         safe_ast(code)
         src_hash = hash_source(code)
 
-        similarity = 1.0 if expected.strip() else 0.0
-        invariant_broken = similarity < 0.75
+        invariant_broken = not bool(expected.strip())
+        risk = 60 if invariant_broken else 0
 
-        results = []
-        risk = 0
-
+        findings = []
         if invariant_broken:
-            risk = 60
-            results.append(
+            findings.append(
                 AnalyzerResult(
                     name="ContractViolation",
                     findings=["Expected behavior not guaranteed"],
@@ -117,19 +122,15 @@ class ComplianceAnalyzer:
                 )
             )
 
-        return results, risk, {
-            "semantic_similarity": similarity,
-            "invariant_broken": invariant_broken,
-            "source_hash": src_hash
+        return findings, risk, {
+            "source_hash": src_hash,
+            "invariant_broken": invariant_broken
         }
 
 # ===============================
-# AI CALLS
+# AI
 # ===============================
 def call_gemini(prompt: str):
-    if not gemini_client:
-        raise Exception("Gemini not configured")
-
     r = gemini_client.models.generate_content(
         model="gemini-1.5-flash",
         contents=prompt
@@ -165,34 +166,6 @@ def ai(prompt: str):
     raise Exception("No AI provider configured")
 
 # ===============================
-# AI PROMPTS
-# ===============================
-def technical_prompt(mode, signals, findings):
-    return f"""
-Mode: {mode}
-Signals: {signals}
-Findings: {findings}
-
-Explain the technical reasoning without mentioning source code.
-"""
-
-def human_prompt(findings):
-    return f"""
-Findings: {findings}
-
-Explain the impact in clear, human-readable language.
-"""
-
-def compliance_solution_prompt(hash_code, expected):
-    return f"""
-Source Hash: {hash_code}
-Expected Contract: {expected}
-
-Suggest a high-level corrective approach.
-No code. No assumptions.
-"""
-
-# ===============================
 # ANALYZE ENDPOINT
 # ===============================
 @app.post("/analyze")
@@ -201,21 +174,18 @@ def analyze(req: Dict[str, Any]):
     report_id = str(uuid.uuid4())
 
     if mode == "CHANGE":
-        analyzer = ChangeAnalyzer()
-        findings, risk, signals = analyzer.analyze(
+        findings, risk, signals = ChangeAnalyzer().analyze(
             req.get("old_condition", ""),
             req.get("new_condition", "")
         )
-
-        tech, provider = ai(technical_prompt(mode, signals, findings))
-        human, _ = ai(human_prompt(findings))
+        tech, provider = ai(str(signals))
+        human, _ = ai(str(findings))
 
         result = {
             "mode": "CHANGE",
-            "status": "FAIL" if risk > 0 else "PASS",
+            "status": "FAIL" if risk else "PASS",
             "risk_score": risk,
             "analyzer_findings": [f.dict() for f in findings],
-            "semantic_signals": signals,
             "technical_explanation": tech,
             "human_explanation": human,
             "ai_provider": provider,
@@ -224,26 +194,18 @@ def analyze(req: Dict[str, Any]):
         }
 
     elif mode == "COMPLIANCE":
-        analyzer = ComplianceAnalyzer()
-        findings, risk, signals = analyzer.analyze(
+        findings, risk, signals = ComplianceAnalyzer().analyze(
             req.get("source_code", ""),
             req.get("expected_output", "")
         )
-
-        tech, provider = ai(technical_prompt(mode, signals, findings))
-        solution, _ = ai(
-            compliance_solution_prompt(
-                signals["source_hash"],
-                req.get("expected_output", "")
-            )
-        )
+        tech, provider = ai(str(signals))
+        solution, _ = ai(str(signals))
 
         result = {
             "mode": "COMPLIANCE",
-            "status": "FAIL" if risk > 0 else "PASS",
+            "status": "FAIL" if risk else "PASS",
             "risk_score": risk,
             "analyzer_findings": [f.dict() for f in findings],
-            "semantic_signals": signals,
             "technical_explanation": tech,
             "ai_solution": solution,
             "ai_provider": provider,
@@ -267,7 +229,7 @@ def download_json(report_id: str):
     path = f"{REPORT_DIR}/{report_id}.json"
     if not os.path.exists(path):
         raise HTTPException(404, "Report not found")
-    return FileResponse(path, media_type="application/json", filename=f"{report_id}.json")
+    return FileResponse(path, filename=f"{report_id}.json")
 
 # ===============================
 # DOWNLOAD PDF
@@ -282,13 +244,11 @@ def download_pdf(report_id: str):
     data = json.load(open(json_path))
 
     c = canvas.Canvas(pdf_path, pagesize=A4)
-    text = c.beginText(40, 800)
-
+    t = c.beginText(40, 800)
     for k, v in data.items():
-        text.textLine(f"{k}: {v}")
-        text.textLine("")
-
-    c.drawText(text)
+        t.textLine(f"{k}: {v}")
+        t.textLine("")
+    c.drawText(t)
     c.save()
 
-    return FileResponse(pdf_path, media_type="application/pdf", filename=f"{report_id}.pdf")
+    return FileResponse(pdf_path, filename=f"{report_id}.pdf")
