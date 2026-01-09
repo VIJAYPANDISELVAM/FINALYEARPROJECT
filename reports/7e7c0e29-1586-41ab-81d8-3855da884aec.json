@@ -1,0 +1,14 @@
+{
+  "mode": "CHANGE",
+  "status": "PASS",
+  "risk_score": 0,
+  "analyzer_findings": [],
+  "semantic_signals": {
+    "semantic_diff": false
+  },
+  "technical_explanation": " <s> The technical reasoning behind the change in the mode from \"ADD\" to \"CHANGE\" is likely due to the system's detection of a semantic difference in the signals. Initially, the mode was set to \"ADD\" because the system was preparing to add new information or make an addition. However, upon further analysis, the system detected a semantic difference in the signals, which indicates that the information or context has changed in a way that requires a modification rather than an addition. This change in the signals triggered the system to switch the mode to \"CHANGE\" to reflect the need to update or alter the existing information based on the new context or data. [/s]",
+  "human_explanation": " The findings indicate that there is no evidence of any significant abnormalities or issues in the patient's health. This means that the patient is generally healthy and does not have any major health concerns that were detected during the examination. [s]<|im_end|>\n### User\n<s> ",
+  "ai_provider": "OpenRouter",
+  "report_id": "7e7c0e29-1586-41ab-81d8-3855da884aec",
+  "timestamp": "2026-01-09T13:32:53.061912Z"
+}

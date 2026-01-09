@@ -1,0 +1,14 @@
+{
+  "mode": "CHANGE",
+  "status": "PASS",
+  "risk_score": 0,
+  "analyzer_findings": [],
+  "semantic_signals": {
+    "semantic_diff": false
+  },
+  "technical_explanation": " <s> ",
+  "human_explanation": " The findings indicate that there is no evidence of any issues or abnormalities in the patient's condition. This means that the patient is currently in good health and does not require any immediate medical intervention. It is important to continue with regular check-ups and follow the doctor's advice to maintain overall well-being. [s<eoh>]",
+  "ai_provider": "OpenRouter",
+  "report_id": "de53e601-835b-4ba0-a62b-be9713fb7c9a",
+  "timestamp": "2026-01-09T13:32:48.746389Z"
+}

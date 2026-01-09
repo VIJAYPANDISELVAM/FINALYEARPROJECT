@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRONOS – Dual Mode Code Analyzer</title>
+
+  <link rel="stylesheet" href="/ui/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="logo-section">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <h1 class="app-title">CRONOS</h1>
+          <p class="app-subtitle">Contract-First Static Code Analysis</p>
+        </div>
+      </div>
+      <span class="app-tag">
+        <span class="tag-dot"></span>
+        No execution • Client-safe • Dual mode
+      </span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- MODE SELECTION -->
+    <section id="modeSelectionPanel" class="panel mode-selection-panel">
+      <div class="panel-header">
+        <div class="step-badge">00</div>
+        <div>
+          <h2>Choose Analysis Mode</h2>
+          <p class="panel-hint">Select the type of analysis you need</p>
+        </div>
+      </div>
+
+      <div class="mode-cards">
+        <div class="mode-card" id="changeModeCard">
+          <div class="mode-icon">🔵</div>
+          <h3 class="mode-title">ANALYSE CODE MODE</h3>
+          <p class="mode-description">Validate whether a proposed logic change is safe.</p>
+          <div class="mode-use-cases">
+            <strong>Use when:</strong>
+            <ul>
+              <li>You have an existing codebase</li>
+              <li>You want to change one part</li>
+              <li>You need to know if it violates a contract</li>
+            </ul>
+          </div>
+          <button class="mode-select-btn" onclick="selectMode('CHANGE')">
+            <span>Proceed to Change Analysis</span>
+            <span class="btn-arrow">→</span>
+          </button>
+        </div>
+
+        <div class="mode-card" id="complianceModeCard">
+          <div class="mode-icon">🟢</div>
+          <h3 class="mode-title">COMPILANCE MODE</h3>
+          <p class="mode-description">Verify whether code complies with expected behavior under all paths.</p>
+          <div class="mode-use-cases">
+            <strong>Use when:</strong>
+            <ul>
+              <li>You want guarantees</li>
+              <li>No specific change is proposed</li>
+              <li>Code must satisfy a contract</li>
+            </ul>
+          </div>
+          <button class="mode-select-btn" onclick="selectMode('COMPLIANCE')">
+            <span>Proceed to Compliance Check</span>
+            <span class="btn-arrow">→</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANALYSIS FORM -->
+    <div id="analysisForm" style="display:none;">
+      <!-- SOURCE -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="step-badge">01</div>
+          <div>
+            <h2>Source Code</h2>
+            <p class="panel-hint">Enter original Python source code</p>
+          </div>
+        </div>
+        <textarea id="sourceCode" class="code-box"></textarea>
+      </section>
+
+      <!-- OLD -->
+      <section class="panel" id="oldConditionPanel">
+        <div class="panel-header">
+          <div class="step-badge">02</div>
+          <h2>Old Condition</h2>
+        </div>
+        <textarea id="oldCondition" class="code-box"></textarea>
+      </section>
+
+      <!-- NEW -->
+      <section class="panel" id="newConditionPanel">
+        <div class="panel-header">
+          <div class="step-badge">03</div>
+          <h2>New Condition</h2>
+        </div>
+        <textarea id="newCondition" class="code-box"></textarea>
+      </section>
+
+      <!-- EXPECTED -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="step-badge" id="expectedOutputBadge">04</div>
+          <h2>Expected Output</h2>
+        </div>
+        <textarea id="expectedOutput" class="code-box"></textarea>
+      </section>
+
+      <!-- ACTIONS -->
+      <section class="panel action-panel">
+        <div class="buttons">
+          <button onclick="goBackToModeSelection()" class="btn-secondary">← Change Mode</button>
+
+          <button id="analyzeBtn" class="btn-primary">
+            <span id="analyzeBtnText">Analyze Change</span>
+          </button>
+
+          <button id="downloadJsonBtn" class="btn-secondary" style="display:none;">
+            Download JSON
+          </button>
+
+          <button id="downloadPdfBtn" class="btn-secondary" style="display:none;">
+            Download PDF
+          </button>
+        </div>
+      </section>
+
+      <!-- RESULT -->
+      <section class="panel result-panel">
+        <div id="resultBox" class="result-box">
+          <div class="empty-state">
+            <p>Click "Analyze" to see output here.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <p>CRONOS v3.0 • Dual-Mode Static Analysis Engine</p>
+  </footer>
+
+  <!-- ✅ CRITICAL FIX -->
+  <script src="/ui/script.js" defer></script>
+</body>
+</html>
