@@ -99,44 +99,56 @@ function renderResult(result) {
 }
 
 /* ---------------- ANALYZE ---------------- */
-function analyzeChange() {
+async function analyzeChange() {
   if (!currentMode) {
     alert("Select a mode first");
     return;
   }
 
-  var payload = {
+  const payload = {
     mode: currentMode,
-    source_code: el("sourceCode").value,
-    expected_output: el("expectedOutput").value,
+    source_code: el("sourceCode")?.value || "",
+    expected_output: el("expectedOutput")?.value || "",
     constraints: {
-      no_behavior_change: el("noBehaviorChange").checked,
-      allow_boundary_change: el("allowBoundaryChange").checked
+      no_behavior_change: el("noBehaviorChange")?.checked || false,
+      allow_boundary_change: el("allowBoundaryChange")?.checked || false
     }
   };
 
   if (currentMode === "CHANGE") {
-    payload.old_condition = el("oldCondition").value;
-    payload.new_condition = el("newCondition").value;
+    payload.old_condition = el("oldCondition")?.value || "";
+    payload.new_condition = el("newCondition")?.value || "";
   }
 
-  fetch(API_BASE + "/analyze", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  })
-    .then(r => r.json())
-    .then(data => {
+  const url = `${API_BASE}/analyze`;
+
+  // 🔁 retry once after cold start
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error("Bad response");
+
+      const data = await res.json();
       lastAnalysisResult = data;
       lastReportId = data.report_id;
       renderResult(data);
-    })
-    .catch(err => {
-      alert("Backend error");
-      console.error(err);
-    });
-}
+      return;
 
+    } catch (err) {
+      if (attempt === 1) {
+        console.warn("Backend waking up… retrying");
+        await new Promise(r => setTimeout(r, 3000));
+      } else {
+        alert("Backend still waking up. Please try again.");
+      }
+    }
+  }
+}
 /* ---------------- DOWNLOADS ---------------- */
 function downloadJSON() {
   if (!lastReportId) {
