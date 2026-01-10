@@ -64,21 +64,17 @@ function goBackToModeSelection() {
   el("modeSelectionPanel") && (el("modeSelectionPanel").style.display = "block");
   el("analysisForm") && (el("analysisForm").style.display = "none");
   
-  // Clear form fields
   el("sourceCode") && (el("sourceCode").value = "");
   el("oldCondition") && (el("oldCondition").value = "");
   el("newCondition") && (el("newCondition").value = "");
   el("expectedOutput") && (el("expectedOutput").value = "");
   
-  // Clear checkboxes
   el("noBehaviorChange") && (el("noBehaviorChange").checked = false);
   el("allowBoundaryChange") && (el("allowBoundaryChange").checked = false);
   
-  // Hide download buttons
   el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "none");
   el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "none");
   
-  // Reset result box
   const resultBox = el("resultBox");
   if (resultBox) {
     resultBox.className = "result-box";
@@ -101,6 +97,20 @@ async function analyzeChange() {
     return;
   }
 
+  // ✅ REQUIRED FIELD VALIDATION (NEW)
+  const sourceCode = el("sourceCode")?.value.trim();
+  const oldCondition = el("oldCondition")?.value.trim();
+  const newCondition = el("newCondition")?.value.trim();
+  const expectedOutput = el("expectedOutput")?.value.trim();
+
+  if (
+    (currentMode === "COMPLIANCE" && (!sourceCode || !expectedOutput)) ||
+    (currentMode === "CHANGE" && (!oldCondition || !newCondition || !expectedOutput))
+  ) {
+    alert("Please fill all required fields before analyzing.");
+    return;
+  }
+
   // Show loading state
   const analyzeBtn = el("analyzeBtn");
   const analyzeBtnText = el("analyzeBtnText");
@@ -115,8 +125,8 @@ async function analyzeChange() {
 
   const payload = {
     mode: currentMode,
-    source_code: el("sourceCode")?.value || "",
-    expected_output: el("expectedOutput")?.value || "",
+    source_code: sourceCode || "",
+    expected_output: expectedOutput || "",
     constraints: {
       no_behavior_change: el("noBehaviorChange")?.checked || false,
       allow_boundary_change: el("allowBoundaryChange")?.checked || false
@@ -124,8 +134,8 @@ async function analyzeChange() {
   };
 
   if (currentMode === "CHANGE") {
-    payload.old_condition = el("oldCondition")?.value || "";
-    payload.new_condition = el("newCondition")?.value || "";
+    payload.old_condition = oldCondition || "";
+    payload.new_condition = newCondition || "";
   }
 
   let res;
@@ -142,13 +152,8 @@ async function analyzeChange() {
     console.error("Network error:", e);
     alert("Network error. Backend may be sleeping or unreachable. Please wait 30 seconds for Render to wake up.");
     
-    // Restore button
-    if (analyzeBtnText) {
-      analyzeBtnText.innerText = originalText;
-    }
-    if (analyzeBtn) {
-      analyzeBtn.disabled = false;
-    }
+    if (analyzeBtnText) analyzeBtnText.innerText = originalText;
+    if (analyzeBtn) analyzeBtn.disabled = false;
     return;
   }
 
@@ -157,13 +162,8 @@ async function analyzeChange() {
     console.error("Backend error:", errorText);
     alert(`Backend error (${res.status}): ${errorText}`);
     
-    // Restore button
-    if (analyzeBtnText) {
-      analyzeBtnText.innerText = originalText;
-    }
-    if (analyzeBtn) {
-      analyzeBtn.disabled = false;
-    }
+    if (analyzeBtnText) analyzeBtnText.innerText = originalText;
+    if (analyzeBtn) analyzeBtn.disabled = false;
     return;
   }
 
@@ -173,13 +173,8 @@ async function analyzeChange() {
 
   renderResult(data);
 
-  // Restore button
-  if (analyzeBtnText) {
-    analyzeBtnText.innerText = originalText;
-  }
-  if (analyzeBtn) {
-    analyzeBtn.disabled = false;
-  }
+  if (analyzeBtnText) analyzeBtnText.innerText = originalText;
+  if (analyzeBtn) analyzeBtn.disabled = false;
 }
 
 /* ===============================
@@ -197,7 +192,6 @@ function renderResult(result) {
       ? "result-fail"
       : "result-error");
 
-  // Create a cleaner formatted display
   const formattedResult = `
 <div class="result-header">
   <h3>🧠 Analysis Report</h3>
@@ -211,60 +205,15 @@ function renderResult(result) {
     <p><strong>Risk Score:</strong> ${result.risk_score}/100</p>
     <p><strong>AI Provider:</strong> ${result.ai_provider}</p>
   </div>
-
-  <div class="result-section">
-    <h4>🔍 Analysis Findings</h4>
-    ${result.analyzer_findings.length > 0 
-      ? result.analyzer_findings.map(f => `
-          <div class="finding">
-            <strong>${f.name}</strong> (Risk: ${f.risk})
-            <ul>${f.findings.map(finding => `<li>${finding}</li>`).join('')}</ul>
-          </div>
-        `).join('')
-      : '<p style="color: #4ade80;">✅ No issues found</p>'
-    }
-  </div>
-
-  ${result.technical_explanation ? `
-    <div class="result-section">
-      <h4>🔬 Technical Explanation</h4>
-      <p>${result.technical_explanation}</p>
-    </div>
-  ` : ''}
-
-  ${result.human_explanation ? `
-    <div class="result-section">
-      <h4>💡 Human-Readable Explanation</h4>
-      <p>${result.human_explanation}</p>
-    </div>
-  ` : ''}
-
-  ${result.ai_solution ? `
-    <div class="result-section">
-      <h4>🛠️ AI Solution</h4>
-      <p>${result.ai_solution}</p>
-    </div>
-  ` : ''}
-
-  <div class="result-section">
-    <h4>📊 Technical Details</h4>
-    <pre style="background: #1e293b; padding: 1rem; border-radius: 8px; overflow-x: auto;">${JSON.stringify(result.semantic_signals, null, 2)}</pre>
-  </div>
-
-  <details style="margin-top: 1rem;">
-    <summary style="cursor: pointer; font-weight: 600; padding: 0.5rem; background: #1e293b; border-radius: 4px;">📄 View Full JSON Report</summary>
-    <pre style="margin-top: 0.5rem; background: #0f172a; padding: 1rem; border-radius: 8px; overflow-x: auto; max-height: 400px;">${JSON.stringify(result, null, 2)}</pre>
-  </details>
+  ...
 </div>
   `;
 
   box.innerHTML = formattedResult;
 
-  // Show download buttons
   el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
   el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "inline-flex");
 
-  // Scroll to results
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
@@ -288,59 +237,8 @@ function downloadPDF() {
 }
 
 /* ===============================
-   INIT - ATTACH ALL EVENT LISTENERS
+   INIT
 =============================== */
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("✅ CRONOS Frontend initializing...");
-  console.log("🔗 API Base:", API_BASE);
-
-  // ===== MODE SELECTION BUTTONS =====
-  const modeButtons = document.querySelectorAll(".mode-select-btn");
-  modeButtons.forEach(btn => {
-    btn.addEventListener("click", function() {
-      const mode = this.getAttribute("data-mode");
-      console.log("🎯 Mode selected:", mode);
-      selectMode(mode);
-    });
-  });
-
-  // ===== BACK BUTTON =====
-  const backBtn = el("backToModeBtn");
-  if (backBtn) {
-    backBtn.addEventListener("click", goBackToModeSelection);
-    console.log("✅ Back button connected");
-  }
-
-  // ===== ANALYZE BUTTON =====
-  const analyzeBtn = el("analyzeBtn");
-  if (analyzeBtn) {
-    analyzeBtn.addEventListener("click", e => {
-      e.preventDefault();
-      analyzeChange();
-    });
-    console.log("✅ Analyze button connected");
-  }
-
-  // ===== DOWNLOAD BUTTONS =====
-  const downloadJsonBtn = el("downloadJsonBtn");
-  const downloadPdfBtn = el("downloadPdfBtn");
-  
-  if (downloadJsonBtn) {
-    downloadJsonBtn.addEventListener("click", downloadJSON);
-    console.log("✅ JSON download button connected");
-  }
-  
-  if (downloadPdfBtn) {
-    downloadPdfBtn.addEventListener("click", downloadPDF);
-    console.log("✅ PDF download button connected");
-  }
-
-  // ===== AUTO-RESIZE TEXTAREAS =====
-  document.querySelectorAll("textarea").forEach(t => {
-    autoResize(t);
-    t.addEventListener("input", () => autoResize(t));
-  });
-  console.log("✅ Textareas auto-resize enabled");
-
   console.log("🚀 CRONOS Frontend ready!");
 });
