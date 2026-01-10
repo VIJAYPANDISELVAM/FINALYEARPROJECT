@@ -2,7 +2,7 @@ let lastAnalysisResult = null;
 let lastReportId = null;
 let currentMode = null;
 
-// ✅ PRODUCTION API BASE - Update this after deploying to Render
+// ✅ UPDATE THIS WITH YOUR RENDER BACKEND URL
 const API_BASE = "https://finalyearproject-3-n6xk.onrender.com";
 
 /* ===============================
@@ -22,62 +22,36 @@ function autoResize(t) {
 }
 
 /* ===============================
-   MODE SELECTION (SAFE)
+   MODE SELECTION
 =============================== */
 function selectMode(mode) {
-  console.log("🎯 Mode selected:", mode);
   currentMode = mode;
 
-  const modePanel = el("modeSelectionPanel");
-  const analysisForm = el("analysisForm");
-  
-  if (modePanel) modePanel.style.display = "none";
-  if (analysisForm) analysisForm.style.display = "block";
+  el("modeSelectionPanel") && (el("modeSelectionPanel").style.display = "none");
+  el("analysisForm") && (el("analysisForm").style.display = "block");
 
   if (mode === "COMPLIANCE") {
-    // Hide change-specific fields
-    const oldPanel = el("oldConditionPanel");
-    const newPanel = el("newConditionPanel");
-    if (oldPanel) oldPanel.style.display = "none";
-    if (newPanel) newPanel.style.display = "none";
+    el("oldConditionPanel") && (el("oldConditionPanel").style.display = "none");
+    el("newConditionPanel") && (el("newConditionPanel").style.display = "none");
 
-    // Update badges
-    const expectedBadge = el("expectedOutputBadge");
-    const constraintsBadge = el("constraintsBadge");
-    if (expectedBadge) expectedBadge.innerText = "02";
-    if (constraintsBadge) constraintsBadge.innerText = "03";
-
-    // Update hints
-    const expectedHint = el("expectedOutputHint");
-    if (expectedHint) {
-      expectedHint.innerText = "Describe the expected behavior (contract)";
-    }
-
-    // Update button text
-    const analyzeBtnText = el("analyzeBtnText");
-    if (analyzeBtnText) analyzeBtnText.innerText = "Check Compliance";
+    el("expectedOutputBadge") && (el("expectedOutputBadge").innerText = "02");
+    el("constraintsBadge") && (el("constraintsBadge").innerText = "03");
+    el("expectedOutputHint") &&
+      (el("expectedOutputHint").innerText =
+        "Describe the expected behavior (contract)");
+    el("analyzeBtnText") &&
+      (el("analyzeBtnText").innerText = "Check Compliance");
   } else {
-    // Show change-specific fields
-    const oldPanel = el("oldConditionPanel");
-    const newPanel = el("newConditionPanel");
-    if (oldPanel) oldPanel.style.display = "block";
-    if (newPanel) newPanel.style.display = "block";
+    el("oldConditionPanel") && (el("oldConditionPanel").style.display = "block");
+    el("newConditionPanel") && (el("newConditionPanel").style.display = "block");
 
-    // Update badges
-    const expectedBadge = el("expectedOutputBadge");
-    const constraintsBadge = el("constraintsBadge");
-    if (expectedBadge) expectedBadge.innerText = "04";
-    if (constraintsBadge) constraintsBadge.innerText = "05";
-
-    // Update hints
-    const expectedHint = el("expectedOutputHint");
-    if (expectedHint) {
-      expectedHint.innerText = "Describe expected behavior after change";
-    }
-
-    // Update button text
-    const analyzeBtnText = el("analyzeBtnText");
-    if (analyzeBtnText) analyzeBtnText.innerText = "Analyze Change";
+    el("expectedOutputBadge") && (el("expectedOutputBadge").innerText = "04");
+    el("constraintsBadge") && (el("constraintsBadge").innerText = "05");
+    el("expectedOutputHint") &&
+      (el("expectedOutputHint").innerText =
+        "Describe expected behavior after change");
+    el("analyzeBtnText") &&
+      (el("analyzeBtnText").innerText = "Analyze Change");
   }
 }
 
@@ -85,33 +59,24 @@ function selectMode(mode) {
    GO BACK TO MODE SELECTION
 =============================== */
 function goBackToModeSelection() {
-  console.log("⬅️ Returning to mode selection");
   currentMode = null;
   
-  const modePanel = el("modeSelectionPanel");
-  const analysisForm = el("analysisForm");
+  el("modeSelectionPanel") && (el("modeSelectionPanel").style.display = "block");
+  el("analysisForm") && (el("analysisForm").style.display = "none");
   
-  if (modePanel) modePanel.style.display = "block";
-  if (analysisForm) analysisForm.style.display = "none";
-  
-  // Clear all form fields
-  const fields = ["sourceCode", "oldCondition", "newCondition", "expectedOutput"];
-  fields.forEach(id => {
-    const field = el(id);
-    if (field) field.value = "";
-  });
+  // Clear form fields
+  el("sourceCode") && (el("sourceCode").value = "");
+  el("oldCondition") && (el("oldCondition").value = "");
+  el("newCondition") && (el("newCondition").value = "");
+  el("expectedOutput") && (el("expectedOutput").value = "");
   
   // Clear checkboxes
-  const noBehavior = el("noBehaviorChange");
-  const allowBoundary = el("allowBoundaryChange");
-  if (noBehavior) noBehavior.checked = false;
-  if (allowBoundary) allowBoundary.checked = false;
+  el("noBehaviorChange") && (el("noBehaviorChange").checked = false);
+  el("allowBoundaryChange") && (el("allowBoundaryChange").checked = false);
   
   // Hide download buttons
-  const jsonBtn = el("downloadJsonBtn");
-  const pdfBtn = el("downloadPdfBtn");
-  if (jsonBtn) jsonBtn.style.display = "none";
-  if (pdfBtn) pdfBtn.style.display = "none";
+  el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "none");
+  el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "none");
   
   // Reset result box
   const resultBox = el("resultBox");
@@ -128,11 +93,9 @@ function goBackToModeSelection() {
 }
 
 /* ===============================
-   ANALYZE (NO FORM SUBMIT)
+   ANALYZE
 =============================== */
 async function analyzeChange() {
-  console.log("🔍 Starting analysis...");
-  
   if (!currentMode) {
     alert("Select a mode first");
     return;
@@ -141,10 +104,14 @@ async function analyzeChange() {
   // Show loading state
   const analyzeBtn = el("analyzeBtn");
   const analyzeBtnText = el("analyzeBtnText");
-  const originalText = analyzeBtnText?.innerText;
+  const originalText = analyzeBtnText ? analyzeBtnText.innerText : "";
   
-  if (analyzeBtnText) analyzeBtnText.innerText = "Analyzing...";
-  if (analyzeBtn) analyzeBtn.disabled = true;
+  if (analyzeBtnText) {
+    analyzeBtnText.innerText = "Analyzing...";
+  }
+  if (analyzeBtn) {
+    analyzeBtn.disabled = true;
+  }
 
   const payload = {
     mode: currentMode,
@@ -161,8 +128,6 @@ async function analyzeChange() {
     payload.new_condition = el("newCondition")?.value || "";
   }
 
-  console.log("📤 Sending payload:", payload);
-
   let res;
   try {
     res = await fetch(`${API_BASE}/analyze`, {
@@ -173,47 +138,54 @@ async function analyzeChange() {
       },
       body: JSON.stringify(payload)
     });
-    
-    console.log("📥 Response status:", res.status);
   } catch (e) {
-    console.error("❌ Network error:", e);
+    console.error("Network error:", e);
     alert("Network error. Backend may be sleeping or unreachable. Please wait 30 seconds for Render to wake up.");
     
     // Restore button
-    if (analyzeBtnText && originalText) analyzeBtnText.innerText = originalText;
-    if (analyzeBtn) analyzeBtn.disabled = false;
+    if (analyzeBtnText) {
+      analyzeBtnText.innerText = originalText;
+    }
+    if (analyzeBtn) {
+      analyzeBtn.disabled = false;
+    }
     return;
   }
 
   if (!res.ok) {
     const errorText = await res.text();
-    console.error("❌ Backend error:", errorText);
+    console.error("Backend error:", errorText);
     alert(`Backend error (${res.status}): ${errorText}`);
     
     // Restore button
-    if (analyzeBtnText && originalText) analyzeBtnText.innerText = originalText;
-    if (analyzeBtn) analyzeBtn.disabled = false;
+    if (analyzeBtnText) {
+      analyzeBtnText.innerText = originalText;
+    }
+    if (analyzeBtn) {
+      analyzeBtn.disabled = false;
+    }
     return;
   }
 
   const data = await res.json();
-  console.log("✅ Analysis complete:", data);
-  
   lastAnalysisResult = data;
   lastReportId = data.report_id;
 
   renderResult(data);
 
   // Restore button
-  if (analyzeBtnText && originalText) analyzeBtnText.innerText = originalText;
-  if (analyzeBtn) analyzeBtn.disabled = false;
+  if (analyzeBtnText) {
+    analyzeBtnText.innerText = originalText;
+  }
+  if (analyzeBtn) {
+    analyzeBtn.disabled = false;
+  }
 }
 
 /* ===============================
    RENDER RESULT
 =============================== */
 function renderResult(result) {
-  console.log("🎨 Rendering result");
   const box = el("resultBox");
   if (!box) return;
 
@@ -236,10 +208,8 @@ function renderResult(result) {
   `;
 
   // Show download buttons
-  const jsonBtn = el("downloadJsonBtn");
-  const pdfBtn = el("downloadPdfBtn");
-  if (jsonBtn) jsonBtn.style.display = "inline-flex";
-  if (pdfBtn) pdfBtn.style.display = "inline-flex";
+  el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
+  el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "inline-flex");
 
   // Scroll to results
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -249,7 +219,6 @@ function renderResult(result) {
    DOWNLOADS
 =============================== */
 function downloadJSON() {
-  console.log("📥 Downloading JSON");
   if (!lastReportId) {
     alert("Run analysis first");
     return;
@@ -258,7 +227,6 @@ function downloadJSON() {
 }
 
 function downloadPDF() {
-  console.log("📄 Downloading PDF");
   if (!lastReportId) {
     alert("Run analysis first");
     return;
@@ -267,12 +235,30 @@ function downloadPDF() {
 }
 
 /* ===============================
-   INIT
+   INIT - ATTACH ALL EVENT LISTENERS
 =============================== */
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("🚀 CRONOS Frontend initializing...");
-  
-  // Analyze button
+  console.log("✅ CRONOS Frontend initializing...");
+  console.log("🔗 API Base:", API_BASE);
+
+  // ===== MODE SELECTION BUTTONS =====
+  const modeButtons = document.querySelectorAll(".mode-select-btn");
+  modeButtons.forEach(btn => {
+    btn.addEventListener("click", function() {
+      const mode = this.getAttribute("data-mode");
+      console.log("🎯 Mode selected:", mode);
+      selectMode(mode);
+    });
+  });
+
+  // ===== BACK BUTTON =====
+  const backBtn = el("backToModeBtn");
+  if (backBtn) {
+    backBtn.addEventListener("click", goBackToModeSelection);
+    console.log("✅ Back button connected");
+  }
+
+  // ===== ANALYZE BUTTON =====
   const analyzeBtn = el("analyzeBtn");
   if (analyzeBtn) {
     analyzeBtn.addEventListener("click", e => {
@@ -280,42 +266,28 @@ document.addEventListener("DOMContentLoaded", () => {
       analyzeChange();
     });
     console.log("✅ Analyze button connected");
-  } else {
-    console.warn("⚠️ Analyze button not found");
   }
 
-  // Download buttons
-  const jsonBtn = el("downloadJsonBtn");
-  const pdfBtn = el("downloadPdfBtn");
+  // ===== DOWNLOAD BUTTONS =====
+  const downloadJsonBtn = el("downloadJsonBtn");
+  const downloadPdfBtn = el("downloadPdfBtn");
   
-  if (jsonBtn) {
-    jsonBtn.addEventListener("click", downloadJSON);
+  if (downloadJsonBtn) {
+    downloadJsonBtn.addEventListener("click", downloadJSON);
     console.log("✅ JSON download button connected");
   }
   
-  if (pdfBtn) {
-    pdfBtn.addEventListener("click", downloadPDF);
+  if (downloadPdfBtn) {
+    downloadPdfBtn.addEventListener("click", downloadPDF);
     console.log("✅ PDF download button connected");
   }
 
-  // Auto-resize textareas
+  // ===== AUTO-RESIZE TEXTAREAS =====
   document.querySelectorAll("textarea").forEach(t => {
     autoResize(t);
     t.addEventListener("input", () => autoResize(t));
   });
-  console.log("✅ Textareas configured");
+  console.log("✅ Textareas auto-resize enabled");
 
-  console.log("✅ CRONOS Frontend initialized");
-  console.log("🔗 API Base:", API_BASE);
+  console.log("🚀 CRONOS Frontend ready!");
 });
-
-/* ===============================
-   GLOBAL EXPORTS (CRITICAL!)
-=============================== */
-window.selectMode = selectMode;
-window.goBackToModeSelection = goBackToModeSelection;
-window.analyzeChange = analyzeChange;
-window.downloadJSON = downloadJSON;
-window.downloadPDF = downloadPDF;
-
-console.log("✅ Global functions exported to window");
