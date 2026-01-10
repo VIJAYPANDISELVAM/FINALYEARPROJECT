@@ -13,6 +13,88 @@ function el(id) {
 }
 
 /* ===============================
+   ✨ NEW: Toast Notification System
+=============================== */
+function showToast(message, type = 'info') {
+  const container = el('toastContainer');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type] || icons.info}</div>
+    <div class="toast-message">${message}</div>
+  `;
+  
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'fadeOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+/* ===============================
+   ✨ NEW: Loading Overlay Control
+=============================== */
+function showLoading() {
+  const overlay = el('loadingOverlay');
+  if (overlay) overlay.classList.add('active');
+}
+
+function hideLoading() {
+  const overlay = el('loadingOverlay');
+  if (overlay) overlay.classList.remove('active');
+}
+
+/* ===============================
+   ✨ NEW: Character Counter Update
+=============================== */
+function updateCharCounter(textareaId, counterId) {
+  const textarea = el(textareaId);
+  const counter = el(counterId);
+  if (!textarea || !counter) return;
+  
+  const length = textarea.value.length;
+  counter.textContent = `${length} character${length !== 1 ? 's' : ''}`;
+  
+  // Visual feedback for large inputs
+  if (length > 1000) {
+    counter.style.color = 'var(--warning)';
+  } else if (length > 500) {
+    counter.style.color = 'var(--text-tertiary)';
+  } else {
+    counter.style.color = 'var(--text-muted)';
+  }
+}
+
+/* ===============================
+   ✨ NEW: Progress Indicator Update
+=============================== */
+function updateProgress(step) {
+  const steps = document.querySelectorAll('.progress-step');
+  steps.forEach((s, index) => {
+    if (index < step) {
+      s.classList.add('completed');
+      s.classList.remove('active');
+    } else if (index === step - 1) {
+      s.classList.add('active');
+      s.classList.remove('completed');
+    } else {
+      s.classList.remove('active', 'completed');
+    }
+  });
+}
+
+/* ===============================
    AUTO RESIZE
 =============================== */
 function autoResize(t) {
@@ -29,6 +111,12 @@ function selectMode(mode) {
 
   el("modeSelectionPanel") && (el("modeSelectionPanel").style.display = "none");
   el("analysisForm") && (el("analysisForm").style.display = "block");
+
+  // ✨ Show toast notification
+  showToast(`${mode === 'CHANGE' ? 'Change Analysis' : 'Compliance'} mode selected`, 'success');
+
+  // ✨ Scroll to top smoothly
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (mode === "COMPLIANCE") {
     el("oldConditionPanel") && (el("oldConditionPanel").style.display = "none");
@@ -53,6 +141,9 @@ function selectMode(mode) {
     el("analyzeBtnText") &&
       (el("analyzeBtnText").innerText = "Analyze Change");
   }
+
+  // ✨ Reset progress indicator
+  updateProgress(1);
 }
 
 /* ===============================
@@ -86,6 +177,47 @@ function goBackToModeSelection() {
       </div>
     `;
   }
+
+  // ✨ Update character counters
+  updateCharCounter('sourceCode', 'sourceCodeCounter');
+  updateCharCounter('oldCondition', 'oldConditionCounter');
+  updateCharCounter('newCondition', 'newConditionCounter');
+  updateCharCounter('expectedOutput', 'expectedOutputCounter');
+
+  // ✨ Show toast
+  showToast('Form reset - Select a mode to start', 'info');
+
+  // ✨ Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ===============================
+   ✨ NEW: Clear All Fields
+=============================== */
+function clearAllFields() {
+  if (!confirm('Are you sure you want to clear all fields?')) return;
+
+  el("sourceCode") && (el("sourceCode").value = "");
+  el("oldCondition") && (el("oldCondition").value = "");
+  el("newCondition") && (el("newCondition").value = "");
+  el("expectedOutput") && (el("expectedOutput").value = "");
+  
+  el("noBehaviorChange") && (el("noBehaviorChange").checked = false);
+  el("allowBoundaryChange") && (el("allowBoundaryChange").checked = false);
+
+  // Update all textareas
+  document.querySelectorAll('textarea').forEach(t => {
+    autoResize(t);
+  });
+
+  // Update character counters
+  updateCharCounter('sourceCode', 'sourceCodeCounter');
+  updateCharCounter('oldCondition', 'oldConditionCounter');
+  updateCharCounter('newCondition', 'newConditionCounter');
+  updateCharCounter('expectedOutput', 'expectedOutputCounter');
+
+  showToast('All fields cleared', 'success');
+  updateProgress(1);
 }
 
 /* ===============================
@@ -93,11 +225,11 @@ function goBackToModeSelection() {
 =============================== */
 async function analyzeChange() {
   if (!currentMode) {
-    alert("Select a mode first");
+    showToast('Please select a mode first', 'error');
     return;
   }
 
-  /* ✅ REQUIRED FIELD VALIDATION (ONLY ADDITION) */
+  /* ✅ REQUIRED FIELD VALIDATION */
   const sourceCode = el("sourceCode")?.value.trim();
   const oldCondition = el("oldCondition")?.value.trim();
   const newCondition = el("newCondition")?.value.trim();
@@ -109,18 +241,27 @@ async function analyzeChange() {
     (currentMode === "CHANGE" &&
       (!oldCondition || !newCondition || !expectedOutput))
   ) {
-    alert("Please fill all required fields before analyzing.");
+    showToast('Please fill all required fields before analyzing', 'error');
     return;
   }
-  /* ✅ END VALIDATION */
+
+  // ✨ Show loading overlay
+  showLoading();
+
+  // ✨ Update progress
+  updateProgress(4);
 
   // Show loading state
   const analyzeBtn = el("analyzeBtn");
   const analyzeBtnText = el("analyzeBtnText");
+  const btnSpinner = analyzeBtn?.querySelector('.btn-spinner');
   const originalText = analyzeBtnText ? analyzeBtnText.innerText : "";
   
   if (analyzeBtnText) {
-    analyzeBtnText.innerText = "Analyzing...";
+    analyzeBtnText.innerText = "Analyzing";
+  }
+  if (btnSpinner) {
+    btnSpinner.style.display = "inline-block";
   }
   if (analyzeBtn) {
     analyzeBtn.disabled = true;
@@ -153,9 +294,11 @@ async function analyzeChange() {
     });
   } catch (e) {
     console.error("Network error:", e);
-    alert("Network error. Backend may be sleeping or unreachable. Please wait 30 seconds for Render to wake up.");
+    showToast('Network error. Backend may be sleeping. Please wait 30s and retry.', 'error');
+    hideLoading();
     
     if (analyzeBtnText) analyzeBtnText.innerText = originalText;
+    if (btnSpinner) btnSpinner.style.display = "none";
     if (analyzeBtn) analyzeBtn.disabled = false;
     return;
   }
@@ -163,9 +306,11 @@ async function analyzeChange() {
   if (!res.ok) {
     const errorText = await res.text();
     console.error("Backend error:", errorText);
-    alert(`Backend error (${res.status}): ${errorText}`);
+    showToast(`Backend error (${res.status}): ${errorText.substring(0, 100)}`, 'error');
+    hideLoading();
     
     if (analyzeBtnText) analyzeBtnText.innerText = originalText;
+    if (btnSpinner) btnSpinner.style.display = "none";
     if (analyzeBtn) analyzeBtn.disabled = false;
     return;
   }
@@ -176,7 +321,14 @@ async function analyzeChange() {
 
   renderResult(data);
 
+  // ✨ Hide loading overlay
+  hideLoading();
+
+  // ✨ Show success toast
+  showToast(`Analysis complete: ${data.status}`, data.status === 'PASS' ? 'success' : 'warning');
+
   if (analyzeBtnText) analyzeBtnText.innerText = originalText;
+  if (btnSpinner) btnSpinner.style.display = "none";
   if (analyzeBtn) analyzeBtn.disabled = false;
 }
 
@@ -282,7 +434,7 @@ ${JSON.stringify(result, null, 2)}
   // Render base HTML
   box.innerHTML = formattedResult;
 
-  // ✅ SAFE text injection (prevents strike-through & markdown rendering)
+  // ✅ SAFE text injection
   const techEl = document.getElementById("technicalExplanationText");
   if (techEl) techEl.textContent = result.technical_explanation || "";
 
@@ -303,27 +455,72 @@ ${JSON.stringify(result, null, 2)}
 =============================== */
 function downloadJSON() {
   if (!lastReportId) {
-    alert("Run analysis first");
+    showToast('Run analysis first to download report', 'warning');
     return;
   }
+  showToast('Downloading JSON report...', 'info');
   window.open(`${API_BASE}/report/json/${lastReportId}`, "_blank");
 }
 
 function downloadPDF() {
   if (!lastReportId) {
-    alert("Run analysis first");
+    showToast('Run analysis first to download report', 'warning');
     return;
   }
+  showToast('Downloading PDF report...', 'info');
   window.open(`${API_BASE}/report/pdf/${lastReportId}`, "_blank");
+}
+
+/* ===============================
+   ✨ NEW: Scroll to Top
+=============================== */
+function handleScroll() {
+  const scrollBtn = el('scrollToTop');
+  if (!scrollBtn) return;
+  
+  if (window.scrollY > 300) {
+    scrollBtn.style.display = 'block';
+  } else {
+    scrollBtn.style.display = 'none';
+  }
+}
+
+function scrollToTop() {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+}
+
+/* ===============================
+   ✨ NEW: Form Field Tracking
+=============================== */
+function trackFieldCompletion() {
+  const sourceCode = el("sourceCode")?.value.trim();
+  const expectedOutput = el("expectedOutput")?.value.trim();
+  
+  if (sourceCode && !expectedOutput) {
+    updateProgress(2);
+  } else if (sourceCode && expectedOutput) {
+    updateProgress(3);
+  } else if (sourceCode) {
+    updateProgress(1);
+  }
 }
 
 /* ===============================
    INIT - ATTACH ALL EVENT LISTENERS
 =============================== */
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("✅ CRONOS Frontend initializing...");
+  console.log("✅ CRONOS Frontend v3.2 initializing...");
   console.log("🔗 API Base:", API_BASE);
 
+  // ✨ Show welcome toast
+  setTimeout(() => {
+    showToast('Welcome to CRONOS! Select an analysis mode to begin.', 'info');
+  }, 500);
+
+  // Mode selection
   const modeButtons = document.querySelectorAll(".mode-select-btn");
   modeButtons.forEach(btn => {
     btn.addEventListener("click", function() {
@@ -332,6 +529,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // Navigation buttons
   const backBtn = el("backToModeBtn");
   backBtn && backBtn.addEventListener("click", goBackToModeSelection);
 
@@ -341,14 +539,59 @@ document.addEventListener("DOMContentLoaded", () => {
     analyzeChange();
   });
 
+  // ✨ NEW: Clear all button
+  const clearBtn = el("clearAllBtn");
+  clearBtn && clearBtn.addEventListener("click", clearAllFields);
+
+  // Download buttons
   el("downloadJsonBtn")?.addEventListener("click", downloadJSON);
   el("downloadPdfBtn")?.addEventListener("click", downloadPDF);
 
+  // ✨ NEW: Scroll to top button
+  const scrollBtn = el("scrollToTop");
+  scrollBtn && scrollBtn.addEventListener("click", scrollToTop);
+  window.addEventListener("scroll", handleScroll);
+
+  // Textarea auto-resize and character counters
   document.querySelectorAll("textarea").forEach(t => {
     autoResize(t);
-    t.addEventListener("input", () => autoResize(t));
+    
+    t.addEventListener("input", () => {
+      autoResize(t);
+      
+      // ✨ Update character counter
+      const counterId = t.id + 'Counter';
+      updateCharCounter(t.id, counterId);
+      
+      // ✨ Track progress
+      trackFieldCompletion();
+    });
+
+    // ✨ Initialize character counters
+    const counterId = t.id + 'Counter';
+    updateCharCounter(t.id, counterId);
   });
+
+  // ✨ NEW: Add keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd + Enter to analyze
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if (currentMode && el('analyzeBtn')) {
+        e.preventDefault();
+        analyzeChange();
+      }
+    }
+    
+    // Escape to go back
+    if (e.key === 'Escape' && currentMode) {
+      goBackToModeSelection();
+    }
+  });
+
+  console.log("✅ CRONOS Frontend ready!");
+  console.log("💡 Tip: Use Ctrl+Enter to analyze, Escape to go back");
 });
+
 function escapeHTML(text) {
   if (typeof text !== "string") return text;
   return text
@@ -358,4 +601,3 @@ function escapeHTML(text) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
-
