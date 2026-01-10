@@ -200,6 +200,7 @@ function renderResult(result) {
   <h3>🧠 Analysis Report</h3>
   <span class="status-badge status-${result.status.toLowerCase()}">${result.status}</span>
 </div>
+
 <div class="result-content">
   <div class="result-section">
     <h4>📋 Summary</h4>
@@ -211,51 +212,85 @@ function renderResult(result) {
 
   <div class="result-section">
     <h4>🔍 Analysis Findings</h4>
-    ${result.analyzer_findings.length > 0 
-      ? result.analyzer_findings.map(f => `
-          <div class="finding">
-            <strong>${f.name}</strong> (Risk: ${f.risk})
-            <ul>${f.findings.map(finding => `<li>${finding}</li>`).join('')}</ul>
-          </div>
-        `).join('')
-      : '<p style="color: #4ade80;">✅ No issues found</p>'
+    ${
+      result.analyzer_findings.length > 0
+        ? result.analyzer_findings
+            .map(
+              f => `
+              <div class="finding">
+                <strong>${f.name}</strong> (Risk: ${f.risk})
+                <ul>${f.findings.map(x => `<li>${x}</li>`).join("")}</ul>
+              </div>
+            `
+            )
+            .join("")
+        : '<p style="color:#4ade80;">✅ No issues found</p>'
     }
   </div>
 
-  ${result.technical_explanation ? `
+  ${
+    result.technical_explanation
+      ? `
     <div class="result-section">
       <h4>🔬 Technical Explanation</h4>
-      <p>${result.technical_explanation}</p>
+      <p id="technicalExplanationText"></p>
     </div>
-  ` : ''}
+  `
+      : ""
+  }
 
-  ${result.human_explanation ? `
+  ${
+    result.human_explanation
+      ? `
     <div class="result-section">
       <h4>💡 Human-Readable Explanation</h4>
-      <p>${result.human_explanation}</p>
+      <p id="humanExplanationText"></p>
     </div>
-  ` : ''}
+  `
+      : ""
+  }
 
-  ${result.ai_solution ? `
+  ${
+    result.ai_solution
+      ? `
     <div class="result-section">
       <h4>🛠️ AI Solution</h4>
-      <p>${result.ai_solution}</p>
+      <p id="aiSolutionText"></p>
     </div>
-  ` : ''}
+  `
+      : ""
+  }
 
   <div class="result-section">
     <h4>📊 Technical Details</h4>
-    <pre style="background: #1e293b; padding: 1rem; border-radius: 8px; overflow-x: auto;">${JSON.stringify(result.semantic_signals, null, 2)}</pre>
+    <pre style="background:#1e293b;padding:1rem;border-radius:8px;overflow-x:auto;">
+${JSON.stringify(result.semantic_signals, null, 2)}
+    </pre>
   </div>
 
-  <details style="margin-top: 1rem;">
-    <summary style="cursor: pointer; font-weight: 600; padding: 0.5rem; background: #1e293b; border-radius: 4px;">📄 View Full JSON Report</summary>
-    <pre style="margin-top: 0.5rem; background: #0f172a; padding: 1rem; border-radius: 8px; overflow-x: auto; max-height: 400px;">${JSON.stringify(result, null, 2)}</pre>
+  <details style="margin-top:1rem;">
+    <summary style="cursor:pointer;font-weight:600;padding:0.5rem;background:#1e293b;border-radius:4px;">
+      📄 View Full JSON Report
+    </summary>
+    <pre style="margin-top:0.5rem;background:#0f172a;padding:1rem;border-radius:8px;overflow-x:auto;max-height:400px;">
+${JSON.stringify(result, null, 2)}
+    </pre>
   </details>
 </div>
   `;
 
+  // Render base HTML
   box.innerHTML = formattedResult;
+
+  // ✅ SAFE text injection (prevents strike-through & markdown rendering)
+  const techEl = document.getElementById("technicalExplanationText");
+  if (techEl) techEl.textContent = result.technical_explanation || "";
+
+  const humanEl = document.getElementById("humanExplanationText");
+  if (humanEl) humanEl.textContent = result.human_explanation || "";
+
+  const aiEl = document.getElementById("aiSolutionText");
+  if (aiEl) aiEl.textContent = result.ai_solution || "";
 
   el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
   el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "inline-flex");
