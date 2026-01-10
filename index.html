@@ -53,7 +53,7 @@
               <li>You need to know if it violates a contract</li>
             </ul>
           </div>
-          <button class="mode-select-btn" onclick="selectMode('CHANGE')">
+          <button class="mode-select-btn" id="changeModeBtn">
             <span>Proceed to Change Analysis</span>
             <span class="btn-arrow">→</span>
           </button>
@@ -71,7 +71,7 @@
               <li>Code must satisfy a contract</li>
             </ul>
           </div>
-          <button class="mode-select-btn" onclick="selectMode('COMPLIANCE')">
+          <button class="mode-select-btn" id="complianceModeBtn">
             <span>Proceed to Compliance Check</span>
             <span class="btn-arrow">→</span>
           </button>
@@ -156,7 +156,7 @@
       <!-- ACTIONS -->
       <section class="panel action-panel">
         <div class="buttons">
-          <button onclick="goBackToModeSelection()" class="btn-secondary">
+          <button id="backBtn" class="btn-secondary">
             ← Change Mode
           </button>
 
@@ -191,38 +191,55 @@
     <p>CRONOS v3.2 • Dual-Mode Static Analysis Engine • Built with FastAPI + Gemini AI</p>
   </footer>
 
-  <!-- ✅ LOAD JAVASCRIPT -->
+  <!-- ✅ LOAD JAVASCRIPT - MUST BE AT END -->
   <script src="./app.js"></script>
+  
+  <!-- ✅ ATTACH EVENT LISTENERS AFTER DOM LOADS -->
   <script>
-    // ✅ GO BACK FUNCTION (Added here since it's referenced in HTML)
-    function goBackToModeSelection() {
-      currentMode = null;
-      document.getElementById('modeSelectionPanel').style.display = 'block';
-      document.getElementById('analysisForm').style.display = 'none';
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🎬 Attaching mode selection listeners...');
       
-      // Clear all form fields
-      document.getElementById('sourceCode').value = '';
-      document.getElementById('oldCondition').value = '';
-      document.getElementById('newCondition').value = '';
-      document.getElementById('expectedOutput').value = '';
-      document.getElementById('noBehaviorChange').checked = false;
-      document.getElementById('allowBoundaryChange').checked = false;
+      // Change Mode button
+      const changeModeBtn = document.getElementById('changeModeBtn');
+      if (changeModeBtn) {
+        changeModeBtn.addEventListener('click', function() {
+          console.log('🔵 Change Mode clicked');
+          if (typeof window.selectMode === 'function') {
+            window.selectMode('CHANGE');
+          } else {
+            console.error('❌ selectMode function not found');
+          }
+        });
+      }
       
-      // Hide download buttons
-      document.getElementById('downloadJsonBtn').style.display = 'none';
-      document.getElementById('downloadPdfBtn').style.display = 'none';
+      // Compliance Mode button
+      const complianceModeBtn = document.getElementById('complianceModeBtn');
+      if (complianceModeBtn) {
+        complianceModeBtn.addEventListener('click', function() {
+          console.log('🟢 Compliance Mode clicked');
+          if (typeof window.selectMode === 'function') {
+            window.selectMode('COMPLIANCE');
+          } else {
+            console.error('❌ selectMode function not found');
+          }
+        });
+      }
       
-      // Reset result box
-      const resultBox = document.getElementById('resultBox');
-      resultBox.className = 'result-box';
-      resultBox.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">🧠</div>
-          <p>Click "Analyze" to see output here.</p>
-          <p class="empty-hint">Your analysis results will appear with technical explanations and AI insights.</p>
-        </div>
-      `;
-    }
+      // Back button
+      const backBtn = document.getElementById('backBtn');
+      if (backBtn) {
+        backBtn.addEventListener('click', function() {
+          console.log('⬅️ Back button clicked');
+          if (typeof window.goBackToModeSelection === 'function') {
+            window.goBackToModeSelection();
+          } else {
+            console.error('❌ goBackToModeSelection function not found');
+          }
+        });
+      }
+      
+      console.log('✅ All listeners attached');
+    });
   </script>
 </body>
 </html>
