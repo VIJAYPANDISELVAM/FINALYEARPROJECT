@@ -1,11 +1,8 @@
-/* ===============================
-   CRONOS v3.2.1 – Frontend Script
-=============================== */
-
 let lastAnalysisResult = null;
 let lastReportId = null;
 let currentMode = null;
 
+// ✅ PRODUCTION API BASE - Update this after deploying to Render
 const API_BASE = "https://finalyearproject-3-n6x.onrender.com";
 
 /* ===============================
@@ -67,6 +64,16 @@ async function analyzeChange() {
     return;
   }
 
+  // Show loading state
+  const analyzeBtn = el("analyzeBtn");
+  const originalText = el("analyzeBtnText")?.innerText;
+  if (el("analyzeBtnText")) {
+    el("analyzeBtnText").innerText = "Analyzing...";
+  }
+  if (analyzeBtn) {
+    analyzeBtn.disabled = true;
+  }
+
   const payload = {
     mode: currentMode,
     source_code: el("sourceCode")?.value || "",
@@ -86,23 +93,52 @@ async function analyzeChange() {
   try {
     res = await fetch(`${API_BASE}/analyze`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
       body: JSON.stringify(payload)
     });
   } catch (e) {
-    alert("Network error. Backend may be sleeping.");
+    console.error("Network error:", e);
+    alert("Network error. Backend may be sleeping or unreachable. Please wait 30 seconds for Render to wake up.");
+    // Restore button
+    if (el("analyzeBtnText") && originalText) {
+      el("analyzeBtnText").innerText = originalText;
+    }
+    if (analyzeBtn) {
+      analyzeBtn.disabled = false;
+    }
     return;
   }
 
   if (!res.ok) {
-    alert("Backend error. Check Render logs.");
+    const errorText = await res.text();
+    console.error("Backend error:", errorText);
+    alert(`Backend error (${res.status}): ${errorText}`);
+    // Restore button
+    if (el("analyzeBtnText") && originalText) {
+      el("analyzeBtnText").innerText = originalText;
+    }
+    if (analyzeBtn) {
+      analyzeBtn.disabled = false;
+    }
     return;
   }
 
   const data = await res.json();
+  lastAnalysisResult = data;
   lastReportId = data.report_id;
 
   renderResult(data);
+
+  // Restore button
+  if (el("analyzeBtnText") && originalText) {
+    el("analyzeBtnText").innerText = originalText;
+  }
+  if (analyzeBtn) {
+    analyzeBtn.disabled = false;
+  }
 }
 
 /* ===============================
@@ -123,24 +159,37 @@ function renderResult(result) {
   box.innerHTML = `
     <div class="result-header">
       <h3>🧠 Analysis Report</h3>
+      <span class="status-badge status-${result.status.toLowerCase()}">${result.status}</span>
     </div>
-    <pre>${JSON.stringify(result, null, 2)}</pre>
+    <div class="result-content">
+      <pre>${JSON.stringify(result, null, 2)}</pre>
+    </div>
   `;
 
+  // Show download buttons
   el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
   el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "inline-flex");
+
+  // Scroll to results
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 /* ===============================
    DOWNLOADS
 =============================== */
 function downloadJSON() {
-  if (!lastReportId) return alert("Run analysis first");
+  if (!lastReportId) {
+    alert("Run analysis first");
+    return;
+  }
   window.open(`${API_BASE}/report/json/${lastReportId}`, "_blank");
 }
 
 function downloadPDF() {
-  if (!lastReportId) return alert("Run analysis first");
+  if (!lastReportId) {
+    alert("Run analysis first");
+    return;
+  }
   window.open(`${API_BASE}/report/pdf/${lastReportId}`, "_blank");
 }
 
@@ -148,19 +197,27 @@ function downloadPDF() {
    INIT
 =============================== */
 document.addEventListener("DOMContentLoaded", () => {
-  el("analyzeBtn") &&
-    el("analyzeBtn").addEventListener("click", e => {
+  // Analyze button
+  const analyzeBtn = el("analyzeBtn");
+  if (analyzeBtn) {
+    analyzeBtn.addEventListener("click", e => {
       e.preventDefault();
       analyzeChange();
     });
+  }
 
+  // Download buttons
   el("downloadJsonBtn")?.addEventListener("click", downloadJSON);
   el("downloadPdfBtn")?.addEventListener("click", downloadPDF);
 
+  // Auto-resize textareas
   document.querySelectorAll("textarea").forEach(t => {
     autoResize(t);
     t.addEventListener("input", () => autoResize(t));
   });
+
+  console.log("✅ CRONOS Frontend initialized");
+  console.log("🔗 API Base:", API_BASE);
 });
 
 /* ===============================
