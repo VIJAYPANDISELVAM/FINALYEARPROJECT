@@ -2,6 +2,10 @@
 # CRONOS v3.2 – Dual Mode Engine
 # BULLETPROOF CORS CONFIGURATION
 # ===============================
+# ===============================
+# CRONOS v3.2 – Dual Mode Engine
+# BULLETPROOF CORS CONFIGURATION
+# ===============================
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -123,38 +127,68 @@ class ChangeAnalyzer:
         ], 40, {"semantic_diff": True}
 
 # ===============================
-# COMPLIANCE ANALYZER
+# COMPLIANCE ANALYZER (FIXED)
 # ===============================
 class ComplianceAnalyzer:
     def analyze(self, code: str, expected: str):
         safe_ast(code)
         src_hash = hash_source(code)
 
-        # ✅ Use AI to determine if code matches expected behavior
+        # ✅ FIXED: If no expected output specified, pass with risk 0
         if not expected.strip():
-            # No expected output specified
             return [], 0, {
                 "semantic_similarity": 1.0,
                 "invariant_broken": False,
-                "source_hash": src_hash
+                "source_hash": src_hash,
+                "comparison_method": "no_contract_specified"
             }
-        
-        # Ask AI to compare
+
+        # ✅ FIXED: Use AI to determine if code matches expected behavior
         comparison_prompt = f"""
-Does this code produce the expected output?
+You are analyzing whether Python code produces the expected output.
 
 CODE:
 {code}
 
-EXPECTED OUTPUT:
+EXPECTED OUTPUT/BEHAVIOR:
 {expected}
 
-Respond with ONLY "MATCH" or "MISMATCH".
+Task: Determine if the CODE will produce or match the EXPECTED OUTPUT/BEHAVIOR.
+- Consider what the code actually does (variables, functions, print statements)
+- Compare it with what is expected
+- If they are different or don't match, respond with "MISMATCH"
+- If they match or are equivalent, respond with "MATCH"
+
+Respond with ONLY one word: "MATCH" or "MISMATCH"
 """
         
-        ai_response, _ = ai(comparison_prompt)
-        matches = "MATCH" in ai_response.upper()
-        
+        try:
+            ai_response, provider = ai(comparison_prompt)
+            # More strict matching: only consider it a match if AI explicitly says MATCH
+            # and doesn't mention MISMATCH
+            response_upper = ai_response.upper()
+            matches = "MATCH" in response_upper and "MISMATCH" not in response_upper
+            ai_comparison_result = ai_response
+        except Exception as e:
+            # Fallback: Enhanced text comparison
+            code_normalized = code.strip().lower()
+            expected_normalized = expected.strip().lower()
+            
+            # Check if expected behavior is NOT in code (indicates mismatch)
+            # For example: code has "print(age)" but expected has "print(name)"
+            matches = False
+            
+            # Extract key identifiers from expected
+            expected_identifiers = set(expected_normalized.replace('(', ' ').replace(')', ' ').replace(',', ' ').split())
+            code_identifiers = set(code_normalized.replace('(', ' ').replace(')', ' ').replace(',', ' ').split())
+            
+            # Check if expected identifiers are in code
+            if expected_identifiers.issubset(code_identifiers):
+                matches = True
+            
+            provider = "Fallback"
+            ai_comparison_result = f"Fallback analysis: expected_ids={expected_identifiers}, code_ids={code_identifiers}"
+
         results = []
         risk = 0
 
@@ -165,7 +199,11 @@ Respond with ONLY "MATCH" or "MISMATCH".
                     name="ContractViolation",
                     findings=["Code does not produce expected output"],
                     risk=60,
-                    details={"ai_analysis": ai_response}
+                    details={
+                        "expected": expected,
+                        "ai_comparison": ai_comparison_result,
+                        "match_result": "mismatch"
+                    }
                 )
             )
         
@@ -174,8 +212,10 @@ Respond with ONLY "MATCH" or "MISMATCH".
         return results, risk, {
             "semantic_similarity": similarity,
             "invariant_broken": not matches,
-            "source_hash": src_hash
+            "source_hash": src_hash,
+            "comparison_method": "ai_analysis"
         }
+
 # ===============================
 # AI CALLS
 # ===============================
