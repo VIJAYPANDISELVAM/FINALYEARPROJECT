@@ -38,11 +38,11 @@ app = FastAPI(
     description="Production-ready deployment for Render with CORS and all features"
 )
 
-# ✅ CORS CONFIGURATION FOR PRODUCTION
+# ✅ CRITICAL FIX: ADD YOUR EXACT VERCEL DOMAIN
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://cronosduo.vercel.app",
+        "https://finalyearproject-lime.vercel.app",  # Your exact domain
         "https://*.vercel.app",  # All Vercel preview deployments
         "http://localhost:3000",
         "http://127.0.0.1:5500",
