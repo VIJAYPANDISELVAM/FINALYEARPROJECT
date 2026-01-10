@@ -8,15 +8,52 @@
   <link rel="stylesheet" href="./style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 
 <body>
+  <!-- ✨ NEW: Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner">
+      <div class="spinner-ring"></div>
+      <div class="spinner-ring"></div>
+      <div class="spinner-ring"></div>
+      <p class="loading-text">Analyzing Code...</p>
+    </div>
+  </div>
+
+  <!-- ✨ NEW: Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
   <!-- HEADER -->
   <header class="app-header">
     <div class="header-content">
       <div class="logo-section">
-        <div class="logo-icon">⚡</div>
+        <!-- ✨ NEW: SVG Logo with your {RONOS design -->
+        <div class="logo-icon">
+          <svg width="48" height="48" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+              </linearGradient>
+            </defs>
+            <!-- Left curly brace { -->
+            <path d="M 25 30 Q 20 30 20 35 L 20 50 Q 20 55 15 55 Q 20 55 20 60 L 20 75 Q 20 80 25 80" 
+                  stroke="url(#logoGradient)" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <!-- Right curly brace } (mirrored) -->
+            <path d="M 95 30 Q 100 30 100 35 L 100 50 Q 100 55 105 55 Q 100 55 100 60 L 100 75 Q 100 80 95 80" 
+                  stroke="url(#logoGradient)" stroke-width="4" fill="none" stroke-linecap="round"/>
+            <!-- Lightning bolt in center -->
+            <path d="M 60 35 L 50 60 L 60 60 L 55 85" 
+                  stroke="url(#logoGradient)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Pulse circle -->
+            <circle cx="60" cy="60" r="35" stroke="url(#logoGradient)" stroke-width="2" fill="none" opacity="0.3">
+              <animate attributeName="r" from="30" to="40" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" from="0.5" to="0" dur="2s" repeatCount="indefinite" />
+            </circle>
+          </svg>
+        </div>
         <div>
           <h1 class="app-title">CRONOS</h1>
           <p class="app-subtitle">Contract-First Static Code Analysis</p>
@@ -42,6 +79,8 @@
 
       <div class="mode-cards">
         <div class="mode-card" id="changeModeCard">
+          <!-- ✨ NEW: Card Glow Effect -->
+          <div class="card-glow"></div>
           <div class="mode-icon">🔵</div>
           <h3 class="mode-title">ANALYSE CODE MODE</h3>
           <p class="mode-description">Validate whether a proposed logic change is safe.</p>
@@ -60,6 +99,8 @@
         </div>
 
         <div class="mode-card" id="complianceModeCard">
+          <!-- ✨ NEW: Card Glow Effect -->
+          <div class="card-glow"></div>
           <div class="mode-icon">🟢</div>
           <h3 class="mode-title">COMPLIANCE MODE</h3>
           <p class="mode-description">Verify whether code complies with expected behavior under all paths.</p>
@@ -81,6 +122,29 @@
 
     <!-- ANALYSIS FORM -->
     <div id="analysisForm" style="display:none;">
+      <!-- ✨ NEW: Progress Indicator -->
+      <div class="progress-indicator">
+        <div class="progress-step active" data-step="1">
+          <div class="progress-dot">1</div>
+          <span class="progress-label">Source</span>
+        </div>
+        <div class="progress-line"></div>
+        <div class="progress-step" data-step="2">
+          <div class="progress-dot">2</div>
+          <span class="progress-label">Conditions</span>
+        </div>
+        <div class="progress-line"></div>
+        <div class="progress-step" data-step="3">
+          <div class="progress-dot">3</div>
+          <span class="progress-label">Output</span>
+        </div>
+        <div class="progress-line"></div>
+        <div class="progress-step" data-step="4">
+          <div class="progress-dot">4</div>
+          <span class="progress-label">Analyze</span>
+        </div>
+      </div>
+
       <!-- SOURCE -->
       <section class="panel">
         <div class="panel-header">
@@ -90,10 +154,14 @@
             <p class="panel-hint">Enter original Python source code</p>
           </div>
         </div>
-        <textarea id="sourceCode" class="code-box" placeholder="def calculate_discount(price, user_type):
+        <!-- ✨ NEW: Character Counter -->
+        <div class="input-wrapper">
+          <textarea id="sourceCode" class="code-box" placeholder="def calculate_discount(price, user_type):
     if user_type == 'premium':
         return price * 0.8
     return price"></textarea>
+          <div class="char-counter" id="sourceCodeCounter">0 characters</div>
+        </div>
       </section>
 
       <!-- OLD CONDITION -->
@@ -105,7 +173,10 @@
             <p class="panel-hint">Original logic before change</p>
           </div>
         </div>
-        <textarea id="oldCondition" class="code-box" placeholder="if user_type == 'premium':"></textarea>
+        <div class="input-wrapper">
+          <textarea id="oldCondition" class="code-box" placeholder="if user_type == 'premium':"></textarea>
+          <div class="char-counter" id="oldConditionCounter">0 characters</div>
+        </div>
       </section>
 
       <!-- NEW CONDITION -->
@@ -117,7 +188,10 @@
             <p class="panel-hint">Proposed new logic</p>
           </div>
         </div>
-        <textarea id="newCondition" class="code-box" placeholder="if user_type in ['premium', 'vip']:"></textarea>
+        <div class="input-wrapper">
+          <textarea id="newCondition" class="code-box" placeholder="if user_type in ['premium', 'vip']:"></textarea>
+          <div class="char-counter" id="newConditionCounter">0 characters</div>
+        </div>
       </section>
 
       <!-- EXPECTED OUTPUT -->
@@ -129,7 +203,10 @@
             <p class="panel-hint" id="expectedOutputHint">Describe expected behavior after change</p>
           </div>
         </div>
-        <textarea id="expectedOutput" class="code-box" placeholder="Premium users receive 20% discount. Regular users pay full price."></textarea>
+        <div class="input-wrapper">
+          <textarea id="expectedOutput" class="code-box" placeholder="Premium users receive 20% discount. Regular users pay full price."></textarea>
+          <div class="char-counter" id="expectedOutputCounter">0 characters</div>
+        </div>
       </section>
 
       <!-- CONSTRAINTS -->
@@ -162,6 +239,8 @@
 
           <button id="analyzeBtn" class="btn-primary">
             <span id="analyzeBtnText">Analyze Change</span>
+            <!-- ✨ NEW: Button Spinner -->
+            <span class="btn-spinner" style="display:none;"></span>
           </button>
 
           <button id="downloadJsonBtn" class="btn-secondary" style="display:none;">
@@ -170,6 +249,11 @@
 
           <button id="downloadPdfBtn" class="btn-secondary" style="display:none;">
             📄 Download PDF
+          </button>
+
+          <!-- ✨ NEW: Clear All Button -->
+          <button id="clearAllBtn" class="btn-secondary">
+            🗑️ Clear All
           </button>
         </div>
       </section>
@@ -189,6 +273,10 @@
 
   <footer class="app-footer">
     <p>CRONOS v3.2 • Dual-Mode Static Analysis Engine • Built with FastAPI + Gemini AI</p>
+    <!-- ✨ NEW: Scroll to Top Button -->
+    <button id="scrollToTop" class="scroll-to-top" style="display:none;">
+      ↑
+    </button>
   </footer>
 
   <!-- LOAD SCRIPT AT END -->
