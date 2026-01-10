@@ -316,7 +316,13 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 function escapeHTML(str) {
   if (!str) return "";
+
   return str
+    // Remove markdown strike tokens
+    .replace(/\[\/?s\]/gi, "")
+    .replace(/~~/g, "")
+
+    // Escape HTML
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
