@@ -204,10 +204,10 @@ function renderResult(result) {
 <div class="result-content">
   <div class="result-section">
     <h4>📋 Summary</h4>
-    <p><strong>Mode:</strong> ${escapeHTML(result.mode)}</p>
+    <p><strong>Mode:</strong> ${result.mode}</p>
     <p><strong>Status:</strong> <span class="status-${result.status.toLowerCase()}">${result.status}</span></p>
     <p><strong>Risk Score:</strong> ${result.risk_score}/100</p>
-    <p><strong>AI Provider:</strong> ${escapeHTML(result.ai_provider)}</p>
+    <p><strong>AI Provider:</strong> ${result.ai_provider}</p>
   </div>
 
   <div class="result-section">
@@ -217,52 +217,54 @@ function renderResult(result) {
         ? result.analyzer_findings
             .map(
               f => `
-        <div class="finding">
-          <strong>${escapeHTML(f.name)}</strong> (Risk: ${f.risk})
-          <ul>
-            ${f.findings.map(item => `<li>${escapeHTML(item)}</li>`).join("")}
-          </ul>
-        </div>`
+              <div class="finding">
+                <strong>${f.name}</strong> (Risk: ${f.risk})
+                <ul>${f.findings.map(x => `<li>${x}</li>`).join("")}</ul>
+              </div>
+            `
             )
             .join("")
-        : '<p style="color: #4ade80;">✅ No issues found</p>'
+        : '<p style="color:#4ade80;">✅ No issues found</p>'
     }
   </div>
 
   ${
     result.technical_explanation
       ? `
-  <div class="result-section">
-    <h4>🔬 Technical Explanation</h4>
-    <p>${escapeHTML(result.technical_explanation)}</p>
-  </div>`
+    <div class="result-section">
+      <h4>🔬 Technical Explanation</h4>
+      <p id="technicalExplanationText"></p>
+    </div>
+  `
       : ""
   }
 
   ${
     result.human_explanation
       ? `
-  <div class="result-section">
-    <h4>💡 Human-Readable Explanation</h4>
-    <p>${escapeHTML(result.human_explanation)}</p>
-  </div>`
+    <div class="result-section">
+      <h4>💡 Human-Readable Explanation</h4>
+      <p id="humanExplanationText"></p>
+    </div>
+  `
       : ""
   }
 
   ${
     result.ai_solution
       ? `
-  <div class="result-section">
-    <h4>🛠️ AI Solution</h4>
-    <p>${escapeHTML(result.ai_solution)}</p>
-  </div>`
+    <div class="result-section">
+      <h4>🛠️ AI Solution</h4>
+      <p id="aiSolutionText"></p>
+    </div>
+  `
       : ""
   }
 
   <div class="result-section">
     <h4>📊 Technical Details</h4>
     <pre style="background:#1e293b;padding:1rem;border-radius:8px;overflow-x:auto;">
-${escapeHTML(JSON.stringify(result.semantic_signals, null, 2))}
+${JSON.stringify(result.semantic_signals, null, 2)}
     </pre>
   </div>
 
@@ -271,19 +273,31 @@ ${escapeHTML(JSON.stringify(result.semantic_signals, null, 2))}
       📄 View Full JSON Report
     </summary>
     <pre style="margin-top:0.5rem;background:#0f172a;padding:1rem;border-radius:8px;overflow-x:auto;max-height:400px;">
-${escapeHTML(JSON.stringify(result, null, 2))}
+${JSON.stringify(result, null, 2)}
     </pre>
   </details>
 </div>
-`;
+  `;
 
+  // Render base HTML
   box.innerHTML = formattedResult;
+
+  // ✅ SAFE text injection (prevents strike-through & markdown rendering)
+  const techEl = document.getElementById("technicalExplanationText");
+  if (techEl) techEl.textContent = result.technical_explanation || "";
+
+  const humanEl = document.getElementById("humanExplanationText");
+  if (humanEl) humanEl.textContent = result.human_explanation || "";
+
+  const aiEl = document.getElementById("aiSolutionText");
+  if (aiEl) aiEl.textContent = result.ai_solution || "";
 
   el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
   el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "inline-flex");
 
   box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
+
 /* ===============================
    DOWNLOADS
 =============================== */
