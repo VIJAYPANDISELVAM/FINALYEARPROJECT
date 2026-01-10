@@ -87,6 +87,25 @@ def hash_source(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()
 
 # ===============================
+# RISK NORMALIZATION (ADDED)
+# ===============================
+def normalize_risk(raw_risk: int) -> int:
+    if raw_risk <= 0:
+        return 0
+    if raw_risk <= 20:
+        return 20
+    if raw_risk <= 40:
+        return 40
+    if raw_risk <= 60:
+        return 60
+    if raw_risk <= 80:
+        return 80
+    return 100
+
+def pass_fail_from_risk(risk: int) -> str:
+    return "PASS" if risk < 40 else "FAIL"
+
+# ===============================
 # CHANGE MODE ANALYZER
 # ===============================
 class ChangeAnalyzer:
@@ -98,10 +117,10 @@ class ChangeAnalyzer:
             AnalyzerResult(
                 name="SemanticChange",
                 findings=["Old and new conditions differ"],
-                risk=30,
+                risk=40,
                 details={"change_detected": True}
             )
-        ], 30, {"semantic_diff": True}
+        ], 40, {"semantic_diff": True}
 
 # ===============================
 # COMPLIANCE ANALYZER
@@ -190,28 +209,28 @@ def ai(prompt: str):
 # ===============================
 # AI PROMPTS
 # ===============================
-def technical_prompt(mode, signals, findings):
+def technical_prompt(mode, signals, findings, risk):
     return f"""
 Mode: {mode}
 Signals: {signals}
 Findings: {findings}
 
-Explain the technical reasoning clearly in 2-3 sentences.
+Explain the technical reasoning clearly and justify why the risk score is {risk}.
 """
 
-def human_prompt(findings):
+def human_prompt(findings, risk):
     return f"""
 Findings: {findings}
 
-Explain impact in simple human language in 2-3 sentences.
+Explain impact in simple human language considering the risk score {risk}.
 """
 
-def compliance_solution_prompt(hash_code, expected):
+def compliance_solution_prompt(hash_code, expected, risk):
     return f"""
 Source Hash: {hash_code}
 Expected Contract: {expected}
 
-Suggest a high-level corrective strategy in 2-3 sentences.
+Suggest a high-level corrective strategy considering the risk score {risk}.
 No code implementation.
 """
 
@@ -226,17 +245,19 @@ async def analyze(req: AnalyzeRequest):
     try:
         if mode == "CHANGE":
             analyzer = ChangeAnalyzer()
-            findings, risk, signals = analyzer.analyze(
+            findings, raw_risk, signals = analyzer.analyze(
                 req.old_condition,
                 req.new_condition
             )
 
-            tech, provider = ai(technical_prompt(mode, signals, findings))
-            human, _ = ai(human_prompt(findings))
+            risk = normalize_risk(raw_risk)
+
+            tech, provider = ai(technical_prompt(mode, signals, findings, risk))
+            human, _ = ai(human_prompt(findings, risk))
 
             result = {
                 "mode": "CHANGE",
-                "status": "FAIL" if risk > 0 else "PASS",
+                "status": pass_fail_from_risk(risk),
                 "risk_score": risk,
                 "analyzer_findings": [f.dict() for f in findings],
                 "semantic_signals": signals,
@@ -249,22 +270,25 @@ async def analyze(req: AnalyzeRequest):
 
         elif mode == "COMPLIANCE":
             analyzer = ComplianceAnalyzer()
-            findings, risk, signals = analyzer.analyze(
+            findings, raw_risk, signals = analyzer.analyze(
                 req.source_code,
                 req.expected_output
             )
 
-            tech, provider = ai(technical_prompt(mode, signals, findings))
+            risk = normalize_risk(raw_risk)
+
+            tech, provider = ai(technical_prompt(mode, signals, findings, risk))
             solution, _ = ai(
                 compliance_solution_prompt(
                     signals["source_hash"],
-                    req.expected_output
+                    req.expected_output,
+                    risk
                 )
             )
 
             result = {
                 "mode": "COMPLIANCE",
-                "status": "FAIL" if risk > 0 else "PASS",
+                "status": pass_fail_from_risk(risk),
                 "risk_score": risk,
                 "analyzer_findings": [f.dict() for f in findings],
                 "semantic_signals": signals,
