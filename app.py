@@ -130,29 +130,52 @@ class ComplianceAnalyzer:
         safe_ast(code)
         src_hash = hash_source(code)
 
-        similarity = 1.0 if expected.strip() else 0.0
-        invariant_broken = similarity < 0.75
+        # ✅ Use AI to determine if code matches expected behavior
+        if not expected.strip():
+            # No expected output specified
+            return [], 0, {
+                "semantic_similarity": 1.0,
+                "invariant_broken": False,
+                "source_hash": src_hash
+            }
+        
+        # Ask AI to compare
+        comparison_prompt = f"""
+Does this code produce the expected output?
 
+CODE:
+{code}
+
+EXPECTED OUTPUT:
+{expected}
+
+Respond with ONLY "MATCH" or "MISMATCH".
+"""
+        
+        ai_response, _ = ai(comparison_prompt)
+        matches = "MATCH" in ai_response.upper()
+        
         results = []
         risk = 0
 
-        if invariant_broken:
+        if not matches:
             risk = 60
             results.append(
                 AnalyzerResult(
                     name="ContractViolation",
-                    findings=["Expected behavior not guaranteed"],
+                    findings=["Code does not produce expected output"],
                     risk=60,
-                    details={"similarity": similarity}
+                    details={"ai_analysis": ai_response}
                 )
             )
+        
+        similarity = 1.0 if matches else 0.0
 
         return results, risk, {
             "semantic_similarity": similarity,
-            "invariant_broken": invariant_broken,
+            "invariant_broken": not matches,
             "source_hash": src_hash
         }
-
 # ===============================
 # AI CALLS
 # ===============================
