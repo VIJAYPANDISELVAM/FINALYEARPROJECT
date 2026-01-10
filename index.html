@@ -53,7 +53,7 @@
               <li>You need to know if it violates a contract</li>
             </ul>
           </div>
-          <button class="mode-select-btn" id="changeModeBtn">
+          <button class="mode-select-btn" data-mode="CHANGE">
             <span>Proceed to Change Analysis</span>
             <span class="btn-arrow">→</span>
           </button>
@@ -71,7 +71,7 @@
               <li>Code must satisfy a contract</li>
             </ul>
           </div>
-          <button class="mode-select-btn" id="complianceModeBtn">
+          <button class="mode-select-btn" data-mode="COMPLIANCE">
             <span>Proceed to Compliance Check</span>
             <span class="btn-arrow">→</span>
           </button>
@@ -96,7 +96,7 @@
     return price"></textarea>
       </section>
 
-      <!-- OLD CONDITION (Hidden in Compliance Mode) -->
+      <!-- OLD CONDITION -->
       <section class="panel" id="oldConditionPanel">
         <div class="panel-header">
           <div class="step-badge">02</div>
@@ -108,7 +108,7 @@
         <textarea id="oldCondition" class="code-box" placeholder="if user_type == 'premium':"></textarea>
       </section>
 
-      <!-- NEW CONDITION (Hidden in Compliance Mode) -->
+      <!-- NEW CONDITION -->
       <section class="panel" id="newConditionPanel">
         <div class="panel-header">
           <div class="step-badge">03</div>
@@ -132,7 +132,7 @@
         <textarea id="expectedOutput" class="code-box" placeholder="Premium users receive 20% discount. Regular users pay full price."></textarea>
       </section>
 
-      <!-- CONSTRAINTS (Optional Section) -->
+      <!-- CONSTRAINTS -->
       <section class="panel">
         <div class="panel-header">
           <div class="step-badge" id="constraintsBadge">05</div>
@@ -156,7 +156,7 @@
       <!-- ACTIONS -->
       <section class="panel action-panel">
         <div class="buttons">
-          <button id="backBtn" class="btn-secondary">
+          <button id="backToModeBtn" class="btn-secondary">
             ← Change Mode
           </button>
 
@@ -191,55 +191,7 @@
     <p>CRONOS v3.2 • Dual-Mode Static Analysis Engine • Built with FastAPI + Gemini AI</p>
   </footer>
 
-  <!-- ✅ LOAD JAVASCRIPT - MUST BE AT END -->
-  <script src="./app.js"></script>
-  
-  <!-- ✅ ATTACH EVENT LISTENERS AFTER DOM LOADS -->
-  <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('🎬 Attaching mode selection listeners...');
-      
-      // Change Mode button
-      const changeModeBtn = document.getElementById('changeModeBtn');
-      if (changeModeBtn) {
-        changeModeBtn.addEventListener('click', function() {
-          console.log('🔵 Change Mode clicked');
-          if (typeof window.selectMode === 'function') {
-            window.selectMode('CHANGE');
-          } else {
-            console.error('❌ selectMode function not found');
-          }
-        });
-      }
-      
-      // Compliance Mode button
-      const complianceModeBtn = document.getElementById('complianceModeBtn');
-      if (complianceModeBtn) {
-        complianceModeBtn.addEventListener('click', function() {
-          console.log('🟢 Compliance Mode clicked');
-          if (typeof window.selectMode === 'function') {
-            window.selectMode('COMPLIANCE');
-          } else {
-            console.error('❌ selectMode function not found');
-          }
-        });
-      }
-      
-      // Back button
-      const backBtn = document.getElementById('backBtn');
-      if (backBtn) {
-        backBtn.addEventListener('click', function() {
-          console.log('⬅️ Back button clicked');
-          if (typeof window.goBackToModeSelection === 'function') {
-            window.goBackToModeSelection();
-          } else {
-            console.error('❌ goBackToModeSelection function not found');
-          }
-        });
-      }
-      
-      console.log('✅ All listeners attached');
-    });
-  </script>
+  <!-- LOAD SCRIPT AT END -->
+  <script src="./script.js"></script>
 </body>
 </html>
