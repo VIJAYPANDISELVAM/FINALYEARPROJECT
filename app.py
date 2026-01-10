@@ -8,10 +8,11 @@ load_dotenv()
 import os, json, ast, hashlib, uuid, requests
 from datetime import datetime
 from typing import List, Dict, Any
+from io import BytesIO
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -296,11 +297,14 @@ async def download_json(report_id: str):
     path = f"{REPORT_DIR}/{report_id}.json"
     if not os.path.exists(path):
         raise HTTPException(404, "Report not found")
-    return FileResponse(
-        path, 
-        media_type="application/json", 
-        filename=f"{report_id}.json"
-    )
+
+    with open(path) as f:
+        return JSONResponse(
+            content=json.load(f),
+            headers={
+                "Content-Disposition": f'attachment; filename="{report_id}.json"'
+            }
+        )
 
 # ===============================
 # DOWNLOAD PDF
@@ -311,36 +315,34 @@ async def download_pdf(report_id: str):
     if not os.path.exists(json_path):
         raise HTTPException(404, "Report not found")
 
-    pdf_path = f"{REPORT_DIR}/{report_id}.pdf"
-    
-    try:
-        with open(json_path) as f:
-            data = json.load(f)
+    with open(json_path) as f:
+        data = json.load(f)
 
-        c = canvas.Canvas(pdf_path, pagesize=A4)
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(40, 800, "CRONOS Analysis Report")
-        
-        c.setFont("Helvetica", 10)
-        y = 770
-        
-        for k, v in data.items():
-            text = f"{k}: {str(v)[:80]}"
-            c.drawString(40, y, text)
-            y -= 15
-            if y < 50:
-                c.showPage()
-                y = 800
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
 
-        c.save()
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, 800, "CRONOS Analysis Report")
 
-        return FileResponse(
-            pdf_path, 
-            media_type="application/pdf", 
-            filename=f"{report_id}.pdf"
-        )
-    except Exception as e:
-        raise HTTPException(500, f"PDF generation failed: {str(e)}")
+    c.setFont("Helvetica", 10)
+    y = 770
+    for k, v in data.items():
+        c.drawString(40, y, f"{k}: {str(v)[:80]}")
+        y -= 14
+        if y < 50:
+            c.showPage()
+            y = 800
+
+    c.save()
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{report_id}.pdf"'
+        }
+    )
 
 # ===============================
 # HEALTH CHECK
