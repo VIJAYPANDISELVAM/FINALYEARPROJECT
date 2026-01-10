@@ -97,19 +97,22 @@ async function analyzeChange() {
     return;
   }
 
-  // ✅ REQUIRED FIELD VALIDATION (NEW)
+  /* ✅ REQUIRED FIELD VALIDATION (ONLY ADDITION) */
   const sourceCode = el("sourceCode")?.value.trim();
   const oldCondition = el("oldCondition")?.value.trim();
   const newCondition = el("newCondition")?.value.trim();
   const expectedOutput = el("expectedOutput")?.value.trim();
 
   if (
-    (currentMode === "COMPLIANCE" && (!sourceCode || !expectedOutput)) ||
-    (currentMode === "CHANGE" && (!oldCondition || !newCondition || !expectedOutput))
+    (currentMode === "COMPLIANCE" &&
+      (!sourceCode || !expectedOutput)) ||
+    (currentMode === "CHANGE" &&
+      (!oldCondition || !newCondition || !expectedOutput))
   ) {
     alert("Please fill all required fields before analyzing.");
     return;
   }
+  /* ✅ END VALIDATION */
 
   // Show loading state
   const analyzeBtn = el("analyzeBtn");
@@ -125,8 +128,8 @@ async function analyzeChange() {
 
   const payload = {
     mode: currentMode,
-    source_code: sourceCode || "",
-    expected_output: expectedOutput || "",
+    source_code: el("sourceCode")?.value || "",
+    expected_output: el("expectedOutput")?.value || "",
     constraints: {
       no_behavior_change: el("noBehaviorChange")?.checked || false,
       allow_boundary_change: el("allowBoundaryChange")?.checked || false
@@ -134,8 +137,8 @@ async function analyzeChange() {
   };
 
   if (currentMode === "CHANGE") {
-    payload.old_condition = oldCondition || "";
-    payload.new_condition = newCondition || "";
+    payload.old_condition = el("oldCondition")?.value || "";
+    payload.new_condition = el("newCondition")?.value || "";
   }
 
   let res;
@@ -205,7 +208,50 @@ function renderResult(result) {
     <p><strong>Risk Score:</strong> ${result.risk_score}/100</p>
     <p><strong>AI Provider:</strong> ${result.ai_provider}</p>
   </div>
-  ...
+
+  <div class="result-section">
+    <h4>🔍 Analysis Findings</h4>
+    ${result.analyzer_findings.length > 0 
+      ? result.analyzer_findings.map(f => `
+          <div class="finding">
+            <strong>${f.name}</strong> (Risk: ${f.risk})
+            <ul>${f.findings.map(finding => `<li>${finding}</li>`).join('')}</ul>
+          </div>
+        `).join('')
+      : '<p style="color: #4ade80;">✅ No issues found</p>'
+    }
+  </div>
+
+  ${result.technical_explanation ? `
+    <div class="result-section">
+      <h4>🔬 Technical Explanation</h4>
+      <p>${result.technical_explanation}</p>
+    </div>
+  ` : ''}
+
+  ${result.human_explanation ? `
+    <div class="result-section">
+      <h4>💡 Human-Readable Explanation</h4>
+      <p>${result.human_explanation}</p>
+    </div>
+  ` : ''}
+
+  ${result.ai_solution ? `
+    <div class="result-section">
+      <h4>🛠️ AI Solution</h4>
+      <p>${result.ai_solution}</p>
+    </div>
+  ` : ''}
+
+  <div class="result-section">
+    <h4>📊 Technical Details</h4>
+    <pre style="background: #1e293b; padding: 1rem; border-radius: 8px; overflow-x: auto;">${JSON.stringify(result.semantic_signals, null, 2)}</pre>
+  </div>
+
+  <details style="margin-top: 1rem;">
+    <summary style="cursor: pointer; font-weight: 600; padding: 0.5rem; background: #1e293b; border-radius: 4px;">📄 View Full JSON Report</summary>
+    <pre style="margin-top: 0.5rem; background: #0f172a; padding: 1rem; border-radius: 8px; overflow-x: auto; max-height: 400px;">${JSON.stringify(result, null, 2)}</pre>
+  </details>
 </div>
   `;
 
@@ -237,8 +283,34 @@ function downloadPDF() {
 }
 
 /* ===============================
-   INIT
+   INIT - ATTACH ALL EVENT LISTENERS
 =============================== */
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("🚀 CRONOS Frontend ready!");
+  console.log("✅ CRONOS Frontend initializing...");
+  console.log("🔗 API Base:", API_BASE);
+
+  const modeButtons = document.querySelectorAll(".mode-select-btn");
+  modeButtons.forEach(btn => {
+    btn.addEventListener("click", function() {
+      const mode = this.getAttribute("data-mode");
+      selectMode(mode);
+    });
+  });
+
+  const backBtn = el("backToModeBtn");
+  backBtn && backBtn.addEventListener("click", goBackToModeSelection);
+
+  const analyzeBtn = el("analyzeBtn");
+  analyzeBtn && analyzeBtn.addEventListener("click", e => {
+    e.preventDefault();
+    analyzeChange();
+  });
+
+  el("downloadJsonBtn")?.addEventListener("click", downloadJSON);
+  el("downloadPdfBtn")?.addEventListener("click", downloadPDF);
+
+  document.querySelectorAll("textarea").forEach(t => {
+    autoResize(t);
+    t.addEventListener("input", () => autoResize(t));
+  });
 });
