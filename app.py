@@ -1,8 +1,6 @@
 # ===============================
 # CRONOS v3.2 – Dual Mode Engine
-# PRODUCTION READY FOR RENDER
-# Change Mode + Compliance Mode
-# JSON + PDF + AI (Gemini/OpenRouter)
+# BULLETPROOF CORS CONFIGURATION
 # ===============================
 from dotenv import load_dotenv
 load_dotenv()
@@ -11,9 +9,9 @@ import os, json, ast, hashlib, uuid, requests
 from datetime import datetime
 from typing import List, Dict, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -34,32 +32,19 @@ OPENROUTER_ENABLED = bool(OPENROUTER_API_KEY)
 # ===============================
 app = FastAPI(
     title="CRONOS – Dual Mode Code Analyzer",
-    version="3.2.2",
-    description="Production-ready deployment for Render with CORS and all features"
+    version="3.2.3"
 )
 
-# ✅ CRITICAL FIX: ADD YOUR EXACT VERCEL DOMAIN
+# ✅ BULLETPROOF CORS - ALLOW ALL ORIGINS (FOR TESTING)
+# Change this to specific origins in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://finalyearproject-lime.vercel.app",  # Your exact domain
-        "https://*.vercel.app",  # All Vercel preview deployments
-        "http://localhost:3000",
-        "http://127.0.0.1:5500",
-        "http://localhost:5500"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],  # ✅ ALLOW ALL (temporary for testing)
+    allow_credentials=False,  # ✅ Must be False when allow_origins is "*"
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
-
-# ✅ PRE-FLIGHT OPTIONS HANDLER (CRITICAL FOR CORS)
-@app.options("/{path:path}")
-async def options_handler(path: str):
-    return {
-        "message": "CORS preflight OK"
-    }
 
 # ===============================
 # STORAGE
@@ -149,7 +134,7 @@ class ComplianceAnalyzer:
         }
 
 # ===============================
-# AI CALLS (WITH ERROR HANDLING)
+# AI CALLS
 # ===============================
 def call_gemini(prompt: str):
     if not gemini_client:
@@ -187,7 +172,6 @@ def call_openrouter(prompt: str):
         raise Exception(f"OpenRouter API Error: {str(e)}")
 
 def ai(prompt: str):
-    """Try Gemini first, fallback to OpenRouter, return safe default if both fail"""
     if gemini_client:
         try:
             return call_gemini(prompt)
@@ -315,10 +299,7 @@ async def download_json(report_id: str):
     return FileResponse(
         path, 
         media_type="application/json", 
-        filename=f"{report_id}.json",
-        headers={
-            "Access-Control-Expose-Headers": "Content-Disposition"
-        }
+        filename=f"{report_id}.json"
     )
 
 # ===============================
@@ -356,10 +337,7 @@ async def download_pdf(report_id: str):
         return FileResponse(
             pdf_path, 
             media_type="application/pdf", 
-            filename=f"{report_id}.pdf",
-            headers={
-                "Access-Control-Expose-Headers": "Content-Disposition"
-            }
+            filename=f"{report_id}.pdf"
         )
     except Exception as e:
         raise HTTPException(500, f"PDF generation failed: {str(e)}")
@@ -371,8 +349,8 @@ async def download_pdf(report_id: str):
 async def health():
     return {
         "status": "ok",
-        "service": "CRONOS API v3.2.2",
-        "environment": "production",
+        "service": "CRONOS API v3.2.3",
+        "cors": "ALLOW ALL (testing mode)",
         "features": {
             "gemini": gemini_client is not None,
             "openrouter": OPENROUTER_ENABLED
@@ -389,7 +367,10 @@ async def health():
 # ===============================
 @app.on_event("startup")
 async def startup_event():
+    print("=" * 50)
     print("✅ CRONOS Backend Started")
     print(f"📁 Report directory: {REPORT_DIR}")
-    print(f"🤖 Gemini configured: {gemini_client is not None}")
-    print(f"🤖 OpenRouter configured: {OPENROUTER_ENABLED}")
+    print(f"🤖 Gemini: {gemini_client is not None}")
+    print(f"🤖 OpenRouter: {OPENROUTER_ENABLED}")
+    print("🌐 CORS: ALLOW ALL (*) - TESTING MODE")
+    print("=" * 50)
