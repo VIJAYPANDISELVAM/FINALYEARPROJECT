@@ -197,15 +197,68 @@ function renderResult(result) {
       ? "result-fail"
       : "result-error");
 
-  box.innerHTML = `
-    <div class="result-header">
-      <h3>🧠 Analysis Report</h3>
-      <span class="status-badge status-${result.status.toLowerCase()}">${result.status}</span>
+  // Create a cleaner formatted display
+  const formattedResult = `
+<div class="result-header">
+  <h3>🧠 Analysis Report</h3>
+  <span class="status-badge status-${result.status.toLowerCase()}">${result.status}</span>
+</div>
+<div class="result-content">
+  <div class="result-section">
+    <h4>📋 Summary</h4>
+    <p><strong>Mode:</strong> ${result.mode}</p>
+    <p><strong>Status:</strong> <span class="status-${result.status.toLowerCase()}">${result.status}</span></p>
+    <p><strong>Risk Score:</strong> ${result.risk_score}/100</p>
+    <p><strong>AI Provider:</strong> ${result.ai_provider}</p>
+  </div>
+
+  <div class="result-section">
+    <h4>🔍 Analysis Findings</h4>
+    ${result.analyzer_findings.length > 0 
+      ? result.analyzer_findings.map(f => `
+          <div class="finding">
+            <strong>${f.name}</strong> (Risk: ${f.risk})
+            <ul>${f.findings.map(finding => `<li>${finding}</li>`).join('')}</ul>
+          </div>
+        `).join('')
+      : '<p style="color: #4ade80;">✅ No issues found</p>'
+    }
+  </div>
+
+  ${result.technical_explanation ? `
+    <div class="result-section">
+      <h4>🔬 Technical Explanation</h4>
+      <p>${result.technical_explanation}</p>
     </div>
-    <div class="result-content">
-      <pre>${JSON.stringify(result, null, 2)}</pre>
+  ` : ''}
+
+  ${result.human_explanation ? `
+    <div class="result-section">
+      <h4>💡 Human-Readable Explanation</h4>
+      <p>${result.human_explanation}</p>
     </div>
+  ` : ''}
+
+  ${result.ai_solution ? `
+    <div class="result-section">
+      <h4>🛠️ AI Solution</h4>
+      <p>${result.ai_solution}</p>
+    </div>
+  ` : ''}
+
+  <div class="result-section">
+    <h4>📊 Technical Details</h4>
+    <pre style="background: #1e293b; padding: 1rem; border-radius: 8px; overflow-x: auto;">${JSON.stringify(result.semantic_signals, null, 2)}</pre>
+  </div>
+
+  <details style="margin-top: 1rem;">
+    <summary style="cursor: pointer; font-weight: 600; padding: 0.5rem; background: #1e293b; border-radius: 4px;">📄 View Full JSON Report</summary>
+    <pre style="margin-top: 0.5rem; background: #0f172a; padding: 1rem; border-radius: 8px; overflow-x: auto; max-height: 400px;">${JSON.stringify(result, null, 2)}</pre>
+  </details>
+</div>
   `;
+
+  box.innerHTML = formattedResult;
 
   // Show download buttons
   el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
