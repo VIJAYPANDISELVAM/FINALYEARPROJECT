@@ -1,161 +1,228 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CRONOS – Dual Mode Code Analyzer</title>
+
   <link rel="stylesheet" href="./style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 </head>
+
 <body>
-  <!-- Header -->
-  <header class="header">
-    <div class="container">
-      <h1 class="logo">🧠 CRONOS</h1>
-      <p class="tagline">Dual Mode Code Analyzer v3.2</p>
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-content">
+      <div class="logo-section">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <h1 class="app-title">CRONOS</h1>
+          <p class="app-subtitle">Contract-First Static Code Analysis</p>
+        </div>
+      </div>
+      <span class="app-tag">
+        <span class="tag-dot"></span>
+        No execution • Client-safe • Dual mode
+      </span>
     </div>
   </header>
 
-  <!-- Main Content -->
-  <main class="container">
-    
-    <!-- Mode Selection Panel -->
-    <section id="modeSelectionPanel" class="mode-selection">
-      <h2>Select Analysis Mode</h2>
+  <div class="container">
+    <!-- MODE SELECTION -->
+    <section id="modeSelectionPanel" class="panel mode-selection-panel">
+      <div class="panel-header">
+        <div class="step-badge">00</div>
+        <div>
+          <h2>Choose Analysis Mode</h2>
+          <p class="panel-hint">Select the type of analysis you need</p>
+        </div>
+      </div>
+
       <div class="mode-cards">
-        
-        <!-- Compliance Mode Card -->
-        <div class="mode-card" onclick="selectMode('COMPLIANCE')">
-          <div class="mode-icon">📋</div>
-          <h3>Compliance Mode</h3>
-          <p>Verify that source code meets expected behavioral contracts and constraints</p>
-          <button type="button" class="btn btn-primary">Select Compliance</button>
+        <div class="mode-card" id="changeModeCard">
+          <div class="mode-icon">🔵</div>
+          <h3 class="mode-title">ANALYSE CODE MODE</h3>
+          <p class="mode-description">Validate whether a proposed logic change is safe.</p>
+          <div class="mode-use-cases">
+            <strong>Use when:</strong>
+            <ul>
+              <li>You have an existing codebase</li>
+              <li>You want to change one part</li>
+              <li>You need to know if it violates a contract</li>
+            </ul>
+          </div>
+          <button class="mode-select-btn" onclick="selectMode('CHANGE')">
+            <span>Proceed to Change Analysis</span>
+            <span class="btn-arrow">→</span>
+          </button>
         </div>
-        
-        <!-- Change Mode Card -->
-        <div class="mode-card" onclick="selectMode('CHANGE')">
-          <div class="mode-icon">🔄</div>
-          <h3>Change Mode</h3>
-          <p>Analyze semantic differences between old and new conditions with constraint validation</p>
-          <button type="button" class="btn btn-secondary">Select Change</button>
+
+        <div class="mode-card" id="complianceModeCard">
+          <div class="mode-icon">🟢</div>
+          <h3 class="mode-title">COMPLIANCE MODE</h3>
+          <p class="mode-description">Verify whether code complies with expected behavior under all paths.</p>
+          <div class="mode-use-cases">
+            <strong>Use when:</strong>
+            <ul>
+              <li>You want guarantees</li>
+              <li>No specific change is proposed</li>
+              <li>Code must satisfy a contract</li>
+            </ul>
+          </div>
+          <button class="mode-select-btn" onclick="selectMode('COMPLIANCE')">
+            <span>Proceed to Compliance Check</span>
+            <span class="btn-arrow">→</span>
+          </button>
         </div>
-        
       </div>
     </section>
 
-    <!-- Analysis Form (Hidden Initially) -->
-    <form id="analysisForm" class="analysis-form" style="display: none;">
-      
-      <!-- Step 01: Source Code -->
-      <div class="form-section">
-        <div class="section-header">
-          <span class="badge">01</span>
-          <h3>Source Code</h3>
+    <!-- ANALYSIS FORM -->
+    <div id="analysisForm" style="display:none;">
+      <!-- SOURCE -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="step-badge">01</div>
+          <div>
+            <h2>Source Code</h2>
+            <p class="panel-hint">Enter original Python source code</p>
+          </div>
         </div>
-        <textarea 
-          id="sourceCode" 
-          class="code-input" 
-          placeholder="Paste your Python source code here..."
-          rows="6"
-          required
-        ></textarea>
-      </div>
+        <textarea id="sourceCode" class="code-box" placeholder="def calculate_discount(price, user_type):
+    if user_type == 'premium':
+        return price * 0.8
+    return price"></textarea>
+      </section>
 
-      <!-- Step 02/04: Old Condition (CHANGE MODE ONLY) -->
-      <div id="oldConditionPanel" class="form-section" style="display: none;">
-        <div class="section-header">
-          <span class="badge">02</span>
-          <h3>Old Condition</h3>
+      <!-- OLD CONDITION (Hidden in Compliance Mode) -->
+      <section class="panel" id="oldConditionPanel">
+        <div class="panel-header">
+          <div class="step-badge">02</div>
+          <div>
+            <h2>Old Condition</h2>
+            <p class="panel-hint">Original logic before change</p>
+          </div>
         </div>
-        <textarea 
-          id="oldCondition" 
-          class="code-input" 
-          placeholder="Enter the original condition..."
-          rows="4"
-        ></textarea>
-      </div>
+        <textarea id="oldCondition" class="code-box" placeholder="if user_type == 'premium':"></textarea>
+      </section>
 
-      <!-- Step 03/04: New Condition (CHANGE MODE ONLY) -->
-      <div id="newConditionPanel" class="form-section" style="display: none;">
-        <div class="section-header">
-          <span class="badge">03</span>
-          <h3>New Condition</h3>
+      <!-- NEW CONDITION (Hidden in Compliance Mode) -->
+      <section class="panel" id="newConditionPanel">
+        <div class="panel-header">
+          <div class="step-badge">03</div>
+          <div>
+            <h2>New Condition</h2>
+            <p class="panel-hint">Proposed new logic</p>
+          </div>
         </div>
-        <textarea 
-          id="newCondition" 
-          class="code-input" 
-          placeholder="Enter the new/modified condition..."
-          rows="4"
-        ></textarea>
-      </div>
+        <textarea id="newCondition" class="code-box" placeholder="if user_type in ['premium', 'vip']:"></textarea>
+      </section>
 
-      <!-- Step 02/04: Expected Output -->
-      <div class="form-section">
-        <div class="section-header">
-          <span class="badge" id="expectedOutputBadge">02</span>
-          <h3>Expected Output</h3>
-          <span class="hint" id="expectedOutputHint">Describe the expected behavior</span>
+      <!-- EXPECTED OUTPUT -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="step-badge" id="expectedOutputBadge">04</div>
+          <div>
+            <h2>Expected Output</h2>
+            <p class="panel-hint" id="expectedOutputHint">Describe expected behavior after change</p>
+          </div>
         </div>
-        <textarea 
-          id="expectedOutput" 
-          class="code-input" 
-          placeholder="Describe what the code should do..."
-          rows="4"
-        ></textarea>
-      </div>
+        <textarea id="expectedOutput" class="code-box" placeholder="Premium users receive 20% discount. Regular users pay full price."></textarea>
+      </section>
 
-      <!-- Step 03/05: Constraints -->
-      <div class="form-section">
-        <div class="section-header">
-          <span class="badge" id="constraintsBadge">03</span>
-          <h3>Constraints</h3>
+      <!-- CONSTRAINTS (Optional Section) -->
+      <section class="panel">
+        <div class="panel-header">
+          <div class="step-badge" id="constraintsBadge">05</div>
+          <div>
+            <h2>Constraints (Optional)</h2>
+            <p class="panel-hint">Additional safety requirements</p>
+          </div>
         </div>
-        <div class="constraints-group">
-          <label class="checkbox-label">
+        <div class="constraint-options">
+          <label class="constraint-checkbox">
             <input type="checkbox" id="noBehaviorChange">
-            <span>No Behavior Change Allowed</span>
+            <span>No behavior change allowed</span>
           </label>
-          <label class="checkbox-label">
+          <label class="constraint-checkbox">
             <input type="checkbox" id="allowBoundaryChange">
-            <span>Allow Boundary Condition Changes</span>
+            <span>Allow boundary condition changes</span>
           </label>
         </div>
-      </div>
+      </section>
 
-      <!-- Analyze Button -->
-      <div class="form-actions">
-        <button type="button" id="analyzeBtn" class="btn btn-analyze">
-          <span id="analyzeBtnText">Analyze</span>
-        </button>
-      </div>
+      <!-- ACTIONS -->
+      <section class="panel action-panel">
+        <div class="buttons">
+          <button onclick="goBackToModeSelection()" class="btn-secondary">
+            ← Change Mode
+          </button>
 
-    </form>
+          <button id="analyzeBtn" class="btn-primary">
+            <span id="analyzeBtnText">Analyze Change</span>
+          </button>
 
-    <!-- Results Section -->
-    <section id="resultBox" class="result-box" style="display: none;">
-      <!-- Results will be injected here by JavaScript -->
-    </section>
+          <button id="downloadJsonBtn" class="btn-secondary" style="display:none;">
+            📥 Download JSON
+          </button>
 
-    <!-- Download Buttons -->
-    <div class="download-section" style="display: none;" id="downloadSection">
-      <button id="downloadJsonBtn" class="btn btn-download" style="display: none;">
-        📄 Download JSON
-      </button>
-      <button id="downloadPdfBtn" class="btn btn-download" style="display: none;">
-        📑 Download PDF
-      </button>
+          <button id="downloadPdfBtn" class="btn-secondary" style="display:none;">
+            📄 Download PDF
+          </button>
+        </div>
+      </section>
+
+      <!-- RESULT -->
+      <section class="panel result-panel">
+        <div id="resultBox" class="result-box">
+          <div class="empty-state">
+            <div class="empty-icon">🧠</div>
+            <p>Click "Analyze" to see output here.</p>
+            <p class="empty-hint">Your analysis results will appear with technical explanations and AI insights.</p>
+          </div>
+        </div>
+      </section>
     </div>
+  </div>
 
-  </main>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="container">
-      <p>&copy; 2025 CRONOS Project | Dual Mode Code Analyzer</p>
-      <p class="version">Version 3.2.2 | Powered by AI (Gemini + OpenRouter)</p>
-    </div>
+  <footer class="app-footer">
+    <p>CRONOS v3.2 • Dual-Mode Static Analysis Engine • Built with FastAPI + Gemini AI</p>
   </footer>
 
-  <!-- JavaScript -->
-  <script src="./script.js"></script>
+  <!-- ✅ LOAD JAVASCRIPT -->
+  <script src="./app.js"></script>
+  <script>
+    // ✅ GO BACK FUNCTION (Added here since it's referenced in HTML)
+    function goBackToModeSelection() {
+      currentMode = null;
+      document.getElementById('modeSelectionPanel').style.display = 'block';
+      document.getElementById('analysisForm').style.display = 'none';
+      
+      // Clear all form fields
+      document.getElementById('sourceCode').value = '';
+      document.getElementById('oldCondition').value = '';
+      document.getElementById('newCondition').value = '';
+      document.getElementById('expectedOutput').value = '';
+      document.getElementById('noBehaviorChange').checked = false;
+      document.getElementById('allowBoundaryChange').checked = false;
+      
+      // Hide download buttons
+      document.getElementById('downloadJsonBtn').style.display = 'none';
+      document.getElementById('downloadPdfBtn').style.display = 'none';
+      
+      // Reset result box
+      const resultBox = document.getElementById('resultBox');
+      resultBox.className = 'result-box';
+      resultBox.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🧠</div>
+          <p>Click "Analyze" to see output here.</p>
+          <p class="empty-hint">Your analysis results will appear with technical explanations and AI insights.</p>
+        </div>
+      `;
+    }
+  </script>
 </body>
 </html>
