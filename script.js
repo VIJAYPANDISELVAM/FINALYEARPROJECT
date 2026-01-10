@@ -314,3 +314,11 @@ document.addEventListener("DOMContentLoaded", () => {
     t.addEventListener("input", () => autoResize(t));
   });
 });
+function escapeHTML(str) {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
