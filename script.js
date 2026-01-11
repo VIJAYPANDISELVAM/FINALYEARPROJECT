@@ -1,12 +1,13 @@
-// CRONOS Professional - Main Application
-// Version: 3.2 Professional
+// CRONOS Professional - Production Configuration
+// Version: 3.2 Professional - Vercel + Render
 
 let lastAnalysisResult = null;
 let lastReportId = null;
 let currentMode = null;
 let analysisInProgress = false;
 
-const API_BASE = "http://localhost:8000";
+// 🔥 PRODUCTION: Use your Render backend URL
+const API_BASE = "https://finalyearproject-3-n6xk.onrender.com";
 
 // ========================================
 // Utility Functions
@@ -227,9 +228,13 @@ function clearAllFields() {
 // ========================================
 async function testBackendConnection() {
   try {
+    console.log('🔍 Testing backend connection to:', API_BASE);
+    
     const response = await fetch(`${API_BASE}/`, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' }
+      headers: { 
+        'Accept': 'application/json'
+      }
     });
     
     if (response.ok) {
@@ -239,12 +244,12 @@ async function testBackendConnection() {
       return true;
     } else {
       console.error('✕ Backend error:', response.status);
-      Toast.show('Backend connection failed', 'error');
+      Toast.show('Backend connection failed - Render may be sleeping. Please wait 30s and retry.', 'warning');
       return false;
     }
   } catch (e) {
     console.error('✕ Cannot reach backend:', e);
-    Toast.show('Backend not running - Start with: uvicorn app:app --reload', 'error');
+    Toast.show('Backend is waking up... Please wait 30 seconds for Render.', 'warning');
     return false;
   }
 }
@@ -260,7 +265,7 @@ function validateFields() {
   
   if (currentMode === 'COMPLIANCE') {
     if (!sourceCode || !expectedOutput) {
-      Toast.show('Please fill in all required fields', 'warning');
+      Toast.show('Please fill in Source Code and Expected Output', 'warning');
       return false;
     }
   } else if (currentMode === 'CHANGE') {
@@ -322,7 +327,7 @@ async function runAnalysis() {
   }
   
   try {
-    console.log('→ Sending analysis request...');
+    console.log('→ Sending analysis request to:', `${API_BASE}/analyze`);
     console.log('  Payload:', payload);
     
     const response = await fetch(`${API_BASE}/analyze`, {
@@ -334,9 +339,12 @@ async function runAnalysis() {
       body: JSON.stringify(payload)
     });
     
+    console.log('  Response status:', response.status);
+    
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Backend error (${response.status}): ${errorText}`);
+      console.error('  Error response:', errorText);
+      throw new Error(`Backend error (${response.status}): ${errorText.substring(0, 200)}`);
     }
     
     const data = await response.json();
@@ -357,7 +365,13 @@ async function runAnalysis() {
   } catch (error) {
     console.error('✕ Analysis error:', error);
     Loader.hide();
-    Toast.show(error.message || 'Analysis failed', 'error');
+    
+    // Check if it's a network error (Render sleeping)
+    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+      Toast.show('Backend is sleeping on Render. Please wait 30 seconds and try again.', 'error');
+    } else {
+      Toast.show(error.message || 'Analysis failed', 'error');
+    }
   } finally {
     // Reset button state
     analyzeBtnText.textContent = originalText;
@@ -384,7 +398,7 @@ function renderResults(data) {
   const html = `
     <div class="result-status-header">
       <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem;">Analysis Complete</h3>
-      <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem;">
+      <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; flex-wrap: wrap;">
         <span style="display: inline-block; padding: 0.5rem 1rem; background: ${data.status === 'PASS' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; border: 1px solid ${data.status === 'PASS' ? 'var(--color-success)' : 'var(--color-error)'}; border-radius: 20px; font-weight: 700; color: ${data.status === 'PASS' ? 'var(--color-success)' : 'var(--color-error)'}; letter-spacing: 0.05em;">${data.status}</span>
         <span style="color: var(--color-text-tertiary); font-size: 0.875rem;">Risk Score: <strong style="color: var(--color-text-primary);">${data.risk_score}/100</strong></span>
         <span style="color: var(--color-text-tertiary); font-size: 0.875rem;">Provider: <strong style="color: var(--color-text-primary);">${data.ai_provider}</strong></span>
@@ -396,8 +410,8 @@ function renderResults(data) {
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Analysis Findings</h4>
         ${data.analyzer_findings.map(f => `
           <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <strong style="color: var(--color-text-primary);">${f.name}</strong>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
+              <strong style="color: var(--color-text-primary);">${escapeHtml(f.name)}</strong>
               <span style="padding: 0.25rem 0.75rem; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--color-error); border-radius: 12px; font-size: 0.75rem; color: var(--color-error); font-weight: 600;">Risk: ${f.risk}</span>
             </div>
             <ul style="margin: 0; padding-left: 1.5rem; color: var(--color-text-secondary);">
@@ -416,7 +430,7 @@ function renderResults(data) {
       <div style="margin-bottom: 2rem;">
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Technical Explanation</h4>
         <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
-          <p style="color: var(--color-text-secondary); line-height: 1.8;">${escapeHtml(data.technical_explanation)}</p>
+          <p style="color: var(--color-text-secondary); line-height: 1.8; white-space: pre-wrap;">${escapeHtml(data.technical_explanation)}</p>
         </div>
       </div>
     ` : ''}
@@ -425,7 +439,7 @@ function renderResults(data) {
       <div style="margin-bottom: 2rem;">
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Human-Readable Explanation</h4>
         <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
-          <p style="color: var(--color-text-secondary); line-height: 1.8;">${escapeHtml(data.human_explanation)}</p>
+          <p style="color: var(--color-text-secondary); line-height: 1.8; white-space: pre-wrap;">${escapeHtml(data.human_explanation)}</p>
         </div>
       </div>
     ` : ''}
@@ -434,7 +448,7 @@ function renderResults(data) {
       <div style="margin-bottom: 2rem;">
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">AI Recommendations</h4>
         <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
-          <p style="color: var(--color-text-secondary); line-height: 1.8;">${escapeHtml(data.ai_solution)}</p>
+          <p style="color: var(--color-text-secondary); line-height: 1.8; white-space: pre-wrap;">${escapeHtml(data.ai_solution)}</p>
         </div>
       </div>
     ` : ''}
@@ -443,7 +457,7 @@ function renderResults(data) {
       <summary style="cursor: pointer; font-weight: 600; padding: 1rem; background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-primary);">
         View Technical Details
       </summary>
-      <pre style="margin-top: 1rem; padding: 1.5rem; background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-text-tertiary);">${JSON.stringify(data.semantic_signals || {}, null, 2)}</pre>
+      <pre style="margin-top: 1rem; padding: 1.5rem; background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-text-tertiary); white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(data.semantic_signals || {}, null, 2)}</pre>
     </details>
   `;
   
@@ -454,7 +468,9 @@ function renderResults(data) {
   $('downloadPdfBtn').style.display = 'flex';
   
   // Scroll to results
-  resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => {
+    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
 }
 
 // ========================================
@@ -494,6 +510,7 @@ function escapeHtml(text) {
 document.addEventListener('DOMContentLoaded', () => {
   console.log('═'.repeat(60));
   console.log('CRONOS Professional v3.2 - Initializing');
+  console.log('Environment: PRODUCTION (Vercel + Render)');
   console.log('API Base:', API_BASE);
   console.log('═'.repeat(60));
   
@@ -505,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Test backend connection
   setTimeout(() => {
     testBackendConnection();
-  }, 1000);
+  }, 1500);
   
   // Mode selection buttons
   $$('.mode-btn').forEach(btn => {
