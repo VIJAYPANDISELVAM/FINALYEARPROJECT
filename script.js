@@ -1,584 +1,568 @@
+// CRONOS Professional - Main Application
+// Version: 3.2 Professional
+
 let lastAnalysisResult = null;
 let lastReportId = null;
 let currentMode = null;
+let analysisInProgress = false;
 
-// ✅ UPDATE THIS WITH YOUR RENDER BACKEND URL
-const API_BASE = "https://finalyearproject-3-n6xk.onrender.com";
+const API_BASE = "http://localhost:8000";
 
-/* ===============================
-   SAFE ELEMENT GETTER
-=============================== */
-function el(id) {
-  return document.getElementById(id);
-}
+// ========================================
+// Utility Functions
+// ========================================
+const $ = (id) => document.getElementById(id);
+const $$ = (selector) => document.querySelectorAll(selector);
 
-/* ===============================
-   ✨ NEW: Toast Notification System
-=============================== */
-function showToast(message, type = 'info') {
-  const container = el('toastContainer');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
+// ========================================
+// Toast Notification System
+// ========================================
+const Toast = {
+  container: null,
   
-  const icons = {
-    success: '✅',
-    error: '❌',
-    warning: '⚠️',
-    info: 'ℹ️'
-  };
+  init() {
+    this.container = $('toastContainer');
+  },
   
-  toast.innerHTML = `
-    <div class="toast-icon">${icons[type] || icons.info}</div>
-    <div class="toast-message">${message}</div>
-  `;
-  
-  container.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.style.animation = 'fadeOut 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-/* ===============================
-   ✨ NEW: Loading Overlay Control
-=============================== */
-function showLoading() {
-  const overlay = el('loadingOverlay');
-  if (overlay) overlay.classList.add('active');
-}
-
-function hideLoading() {
-  const overlay = el('loadingOverlay');
-  if (overlay) overlay.classList.remove('active');
-}
-
-/* ===============================
-   ✨ NEW: Character Counter Update
-=============================== */
-function updateCharCounter(textareaId, counterId) {
-  const textarea = el(textareaId);
-  const counter = el(counterId);
-  if (!textarea || !counter) return;
-  
-  const length = textarea.value.length;
-  counter.textContent = `${length} character${length !== 1 ? 's' : ''}`;
-  
-  // Visual feedback for large inputs
-  if (length > 1000) {
-    counter.style.color = 'var(--warning)';
-  } else if (length > 500) {
-    counter.style.color = 'var(--text-tertiary)';
-  } else {
-    counter.style.color = 'var(--text-muted)';
+  show(message, type = 'info') {
+    if (!this.container) return;
+    
+    const icons = {
+      success: '✓',
+      error: '✕',
+      warning: '⚠',
+      info: 'i'
+    };
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+      <div class="toast-icon">${icons[type]}</div>
+      <div class="toast-message">${message}</div>
+    `;
+    
+    this.container.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.animation = 'toastFadeOut 300ms ease forwards';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
-}
+};
 
-/* ===============================
-   ✨ NEW: Progress Indicator Update
-=============================== */
-function updateProgress(step) {
-  const steps = document.querySelectorAll('.progress-step');
-  steps.forEach((s, index) => {
-    if (index < step) {
-      s.classList.add('completed');
-      s.classList.remove('active');
-    } else if (index === step - 1) {
-      s.classList.add('active');
-      s.classList.remove('completed');
-    } else {
-      s.classList.remove('active', 'completed');
+// ========================================
+// Analysis Loader Control
+// ========================================
+const Loader = {
+  element: null,
+  steps: ['Parsing AST', 'Semantic Analysis', 'Risk Assessment', 'AI Validation'],
+  currentStep: 0,
+  stepInterval: null,
+  
+  init() {
+    this.element = $('analysisLoader');
+  },
+  
+  show() {
+    if (!this.element) return;
+    this.element.classList.add('active');
+    this.currentStep = 0;
+    this.updateSteps();
+    this.startStepAnimation();
+  },
+  
+  hide() {
+    if (!this.element) return;
+    this.stopStepAnimation();
+    this.element.classList.remove('active');
+  },
+  
+  startStepAnimation() {
+    this.stopStepAnimation();
+    this.stepInterval = setInterval(() => {
+      this.currentStep = (this.currentStep + 1) % this.steps.length;
+      this.updateSteps();
+    }, 800);
+  },
+  
+  stopStepAnimation() {
+    if (this.stepInterval) {
+      clearInterval(this.stepInterval);
+      this.stepInterval = null;
     }
-  });
+  },
+  
+  updateSteps() {
+    const stepElements = $$('.status-steps .step');
+    stepElements.forEach((el, index) => {
+      el.classList.toggle('active', index === this.currentStep);
+    });
+  }
+};
+
+// ========================================
+// Progress Tracker
+// ========================================
+const ProgressTracker = {
+  update(step) {
+    const steps = $$('.tracker-step');
+    steps.forEach((el, index) => {
+      if (index < step) {
+        el.classList.add('completed');
+        el.classList.remove('active');
+      } else if (index === step - 1) {
+        el.classList.add('active');
+        el.classList.remove('completed');
+      } else {
+        el.classList.remove('active', 'completed');
+      }
+    });
+  },
+  
+  reset() {
+    const steps = $$('.tracker-step');
+    steps.forEach(el => {
+      el.classList.remove('active', 'completed');
+    });
+    if (steps[0]) steps[0].classList.add('active');
+  }
+};
+
+// ========================================
+// Character Counter
+// ========================================
+const CharCounter = {
+  update(textareaId) {
+    const textarea = $(textareaId);
+    const counter = $(textareaId + 'Counter');
+    if (!textarea || !counter) return;
+    
+    const length = textarea.value.length;
+    counter.textContent = `${length} char${length !== 1 ? 's' : ''}`;
+  },
+  
+  initAll() {
+    ['sourceCode', 'oldCondition', 'newCondition', 'expectedOutput'].forEach(id => {
+      this.update(id);
+    });
+  }
+};
+
+// ========================================
+// Auto Resize Textareas
+// ========================================
+function autoResize(textarea) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.max(textarea.scrollHeight, 120) + 'px';
 }
 
-/* ===============================
-   AUTO RESIZE
-=============================== */
-function autoResize(t) {
-  if (!t) return;
-  t.style.height = "auto";
-  t.style.height = Math.max(t.scrollHeight, 120) + "px";
-}
-
-/* ===============================
-   MODE SELECTION
-=============================== */
+// ========================================
+// Mode Selection
+// ========================================
 function selectMode(mode) {
   currentMode = mode;
-
-  el("modeSelectionPanel") && (el("modeSelectionPanel").style.display = "none");
-  el("analysisForm") && (el("analysisForm").style.display = "block");
-
-  // ✨ Show toast notification
-  showToast(`${mode === 'CHANGE' ? 'Change Analysis' : 'Compliance'} mode selected`, 'success');
-
-  // ✨ Scroll to top smoothly
+  
+  $('modeSelectionPanel').style.display = 'none';
+  $('analysisForm').style.display = 'block';
+  
+  Toast.show(`${mode === 'CHANGE' ? 'Change Analysis' : 'Compliance Check'} mode activated`, 'success');
+  
   window.scrollTo({ top: 0, behavior: 'smooth' });
-
-  if (mode === "COMPLIANCE") {
-    el("oldConditionPanel") && (el("oldConditionPanel").style.display = "none");
-    el("newConditionPanel") && (el("newConditionPanel").style.display = "none");
-
-    el("expectedOutputBadge") && (el("expectedOutputBadge").innerText = "02");
-    el("constraintsBadge") && (el("constraintsBadge").innerText = "03");
-    el("expectedOutputHint") &&
-      (el("expectedOutputHint").innerText =
-        "Describe the expected behavior (contract)");
-    el("analyzeBtnText") &&
-      (el("analyzeBtnText").innerText = "Check Compliance");
+  
+  if (mode === 'COMPLIANCE') {
+    $('oldConditionPanel').style.display = 'none';
+    $('newConditionPanel').style.display = 'none';
+    $('expectedOutputLabel').textContent = 'Expected Behavior Contract';
   } else {
-    el("oldConditionPanel") && (el("oldConditionPanel").style.display = "block");
-    el("newConditionPanel") && (el("newConditionPanel").style.display = "block");
-
-    el("expectedOutputBadge") && (el("expectedOutputBadge").innerText = "04");
-    el("constraintsBadge") && (el("constraintsBadge").innerText = "05");
-    el("expectedOutputHint") &&
-      (el("expectedOutputHint").innerText =
-        "Describe expected behavior after change");
-    el("analyzeBtnText") &&
-      (el("analyzeBtnText").innerText = "Analyze Change");
+    $('oldConditionPanel').style.display = 'block';
+    $('newConditionPanel').style.display = 'block';
+    $('expectedOutputLabel').textContent = 'Expected Behavior';
   }
-
-  // ✨ Reset progress indicator
-  updateProgress(1);
+  
+  ProgressTracker.reset();
 }
 
-/* ===============================
-   GO BACK TO MODE SELECTION
-=============================== */
+// ========================================
+// Back to Mode Selection
+// ========================================
 function goBackToModeSelection() {
   currentMode = null;
   
-  el("modeSelectionPanel") && (el("modeSelectionPanel").style.display = "block");
-  el("analysisForm") && (el("analysisForm").style.display = "none");
+  $('modeSelectionPanel').style.display = 'block';
+  $('analysisForm').style.display = 'none';
+  $('resultsSection').style.display = 'none';
   
-  el("sourceCode") && (el("sourceCode").value = "");
-  el("oldCondition") && (el("oldCondition").value = "");
-  el("newCondition") && (el("newCondition").value = "");
-  el("expectedOutput") && (el("expectedOutput").value = "");
+  clearAllFields();
+  Toast.show('Form reset - Select a mode to begin', 'info');
   
-  el("noBehaviorChange") && (el("noBehaviorChange").checked = false);
-  el("allowBoundaryChange") && (el("allowBoundaryChange").checked = false);
-  
-  el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "none");
-  el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "none");
-  
-  const resultBox = el("resultBox");
-  if (resultBox) {
-    resultBox.className = "result-box";
-    resultBox.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🧠</div>
-        <p>Click "Analyze" to see output here.</p>
-        <p class="empty-hint">Your analysis results will appear with technical explanations and AI insights.</p>
-      </div>
-    `;
-  }
-
-  // ✨ Update character counters
-  updateCharCounter('sourceCode', 'sourceCodeCounter');
-  updateCharCounter('oldCondition', 'oldConditionCounter');
-  updateCharCounter('newCondition', 'newConditionCounter');
-  updateCharCounter('expectedOutput', 'expectedOutputCounter');
-
-  // ✨ Show toast
-  showToast('Form reset - Select a mode to start', 'info');
-
-  // ✨ Scroll to top
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-/* ===============================
-   ✨ NEW: Clear All Fields
-=============================== */
+// ========================================
+// Clear All Fields
+// ========================================
 function clearAllFields() {
-  if (!confirm('Are you sure you want to clear all fields?')) return;
-
-  el("sourceCode") && (el("sourceCode").value = "");
-  el("oldCondition") && (el("oldCondition").value = "");
-  el("newCondition") && (el("newCondition").value = "");
-  el("expectedOutput") && (el("expectedOutput").value = "");
-  
-  el("noBehaviorChange") && (el("noBehaviorChange").checked = false);
-  el("allowBoundaryChange") && (el("allowBoundaryChange").checked = false);
-
-  // Update all textareas
-  document.querySelectorAll('textarea').forEach(t => {
-    autoResize(t);
+  ['sourceCode', 'oldCondition', 'newCondition', 'expectedOutput'].forEach(id => {
+    const el = $(id);
+    if (el) {
+      el.value = '';
+      autoResize(el);
+    }
   });
-
-  // Update character counters
-  updateCharCounter('sourceCode', 'sourceCodeCounter');
-  updateCharCounter('oldCondition', 'oldConditionCounter');
-  updateCharCounter('newCondition', 'newConditionCounter');
-  updateCharCounter('expectedOutput', 'expectedOutputCounter');
-
-  showToast('All fields cleared', 'success');
-  updateProgress(1);
+  
+  ['noBehaviorChange', 'allowBoundaryChange'].forEach(id => {
+    const el = $(id);
+    if (el) el.checked = false;
+  });
+  
+  CharCounter.initAll();
+  ProgressTracker.reset();
+  
+  $('resultsSection').style.display = 'none';
 }
 
-/* ===============================
-   ANALYZE
-=============================== */
-async function analyzeChange() {
-  if (!currentMode) {
-    showToast('Please select a mode first', 'error');
-    return;
+// ========================================
+// Backend Connection Test
+// ========================================
+async function testBackendConnection() {
+  try {
+    const response = await fetch(`${API_BASE}/`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✓ Backend connected:', data);
+      Toast.show('Backend connection established', 'success');
+      return true;
+    } else {
+      console.error('✕ Backend error:', response.status);
+      Toast.show('Backend connection failed', 'error');
+      return false;
+    }
+  } catch (e) {
+    console.error('✕ Cannot reach backend:', e);
+    Toast.show('Backend not running - Start with: uvicorn app:app --reload', 'error');
+    return false;
   }
+}
 
-  /* ✅ REQUIRED FIELD VALIDATION */
-  const sourceCode = el("sourceCode")?.value.trim();
-  const oldCondition = el("oldCondition")?.value.trim();
-  const newCondition = el("newCondition")?.value.trim();
-  const expectedOutput = el("expectedOutput")?.value.trim();
-
-  if (
-    (currentMode === "COMPLIANCE" &&
-      (!sourceCode || !expectedOutput)) ||
-    (currentMode === "CHANGE" &&
-      (!oldCondition || !newCondition || !expectedOutput))
-  ) {
-    showToast('Please fill all required fields before analyzing', 'error');
-    return;
-  }
-
-  // ✨ Show loading overlay
-  showLoading();
-
-  // ✨ Update progress
-  updateProgress(4);
-
-  // Show loading state
-  const analyzeBtn = el("analyzeBtn");
-  const analyzeBtnText = el("analyzeBtnText");
-  const btnSpinner = analyzeBtn?.querySelector('.btn-spinner');
-  const originalText = analyzeBtnText ? analyzeBtnText.innerText : "";
+// ========================================
+// Field Validation
+// ========================================
+function validateFields() {
+  const sourceCode = $('sourceCode')?.value.trim();
+  const oldCondition = $('oldCondition')?.value.trim();
+  const newCondition = $('newCondition')?.value.trim();
+  const expectedOutput = $('expectedOutput')?.value.trim();
   
-  if (analyzeBtnText) {
-    analyzeBtnText.innerText = "Analyzing";
+  if (currentMode === 'COMPLIANCE') {
+    if (!sourceCode || !expectedOutput) {
+      Toast.show('Please fill in all required fields', 'warning');
+      return false;
+    }
+  } else if (currentMode === 'CHANGE') {
+    if (!oldCondition || !newCondition || !expectedOutput) {
+      Toast.show('Please fill in all required fields', 'warning');
+      return false;
+    }
   }
-  if (btnSpinner) {
-    btnSpinner.style.display = "inline-block";
-  }
-  if (analyzeBtn) {
-    analyzeBtn.disabled = true;
-  }
+  
+  return true;
+}
 
+// ========================================
+// Run Analysis
+// ========================================
+async function runAnalysis() {
+  if (!currentMode) {
+    Toast.show('Please select an analysis mode first', 'error');
+    return;
+  }
+  
+  if (!validateFields()) return;
+  
+  if (analysisInProgress) {
+    Toast.show('Analysis already in progress', 'warning');
+    return;
+  }
+  
+  analysisInProgress = true;
+  
+  // Show loader
+  Loader.show();
+  
+  // Update button state
+  const analyzeBtn = $('analyzeBtn');
+  const analyzeBtnText = $('analyzeBtnText');
+  const originalText = analyzeBtnText.textContent;
+  
+  analyzeBtnText.textContent = 'Analyzing...';
+  analyzeBtn.disabled = true;
+  
+  // Update progress
+  ProgressTracker.update(4);
+  
+  // Build payload
   const payload = {
     mode: currentMode,
-    source_code: el("sourceCode")?.value || "",
-    expected_output: el("expectedOutput")?.value || "",
+    source_code: $('sourceCode')?.value || '',
+    expected_output: $('expectedOutput')?.value || '',
     constraints: {
-      no_behavior_change: el("noBehaviorChange")?.checked || false,
-      allow_boundary_change: el("allowBoundaryChange")?.checked || false
+      no_behavior_change: $('noBehaviorChange')?.checked || false,
+      allow_boundary_change: $('allowBoundaryChange')?.checked || false
     }
   };
-
-  if (currentMode === "CHANGE") {
-    payload.old_condition = el("oldCondition")?.value || "";
-    payload.new_condition = el("newCondition")?.value || "";
+  
+  if (currentMode === 'CHANGE') {
+    payload.old_condition = $('oldCondition')?.value || '';
+    payload.new_condition = $('newCondition')?.value || '';
   }
-
-  let res;
+  
   try {
-    res = await fetch(`${API_BASE}/analyze`, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+    console.log('→ Sending analysis request...');
+    console.log('  Payload:', payload);
+    
+    const response = await fetch(`${API_BASE}/analyze`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify(payload)
     });
-  } catch (e) {
-    console.error("Network error:", e);
-    showToast('Network error. Backend may be sleeping. Please wait 30s and retry.', 'error');
-    hideLoading();
     
-    if (analyzeBtnText) analyzeBtnText.innerText = originalText;
-    if (btnSpinner) btnSpinner.style.display = "none";
-    if (analyzeBtn) analyzeBtn.disabled = false;
-    return;
-  }
-
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error("Backend error:", errorText);
-    showToast(`Backend error (${res.status}): ${errorText.substring(0, 100)}`, 'error');
-    hideLoading();
-    
-    if (analyzeBtnText) analyzeBtnText.innerText = originalText;
-    if (btnSpinner) btnSpinner.style.display = "none";
-    if (analyzeBtn) analyzeBtn.disabled = false;
-    return;
-  }
-
-  const data = await res.json();
-  lastAnalysisResult = data;
-  lastReportId = data.report_id;
-
-  renderResult(data);
-
-  // ✨ Hide loading overlay
-  hideLoading();
-
-  // ✨ Show success toast
-  showToast(`Analysis complete: ${data.status}`, data.status === 'PASS' ? 'success' : 'warning');
-
-  if (analyzeBtnText) analyzeBtnText.innerText = originalText;
-  if (btnSpinner) btnSpinner.style.display = "none";
-  if (analyzeBtn) analyzeBtn.disabled = false;
-}
-
-/* ===============================
-   RENDER RESULT
-=============================== */
-function renderResult(result) {
-  const box = el("resultBox");
-  if (!box) return;
-
-  box.className =
-    "result-box " +
-    (result.status === "PASS"
-      ? "result-pass"
-      : result.status === "FAIL"
-      ? "result-fail"
-      : "result-error");
-
-  const formattedResult = `
-<div class="result-header">
-  <h3>🧠 Analysis Report</h3>
-  <span class="status-badge status-${result.status.toLowerCase()}">${result.status}</span>
-</div>
-
-<div class="result-content">
-  <div class="result-section">
-    <h4>📋 Summary</h4>
-    <p><strong>Mode:</strong> ${result.mode}</p>
-    <p><strong>Status:</strong> <span class="status-${result.status.toLowerCase()}">${result.status}</span></p>
-    <p><strong>Risk Score:</strong> ${result.risk_score}/100</p>
-    <p><strong>AI Provider:</strong> ${result.ai_provider}</p>
-  </div>
-
-  <div class="result-section">
-    <h4>🔍 Analysis Findings</h4>
-    ${
-      result.analyzer_findings.length > 0
-        ? result.analyzer_findings
-            .map(
-              f => `
-              <div class="finding">
-                <strong>${f.name}</strong> (Risk: ${f.risk})
-                <ul>${f.findings.map(x => `<li>${x}</li>`).join("")}</ul>
-              </div>
-            `
-            )
-            .join("")
-        : '<p style="color:#4ade80;">✅ No issues found</p>'
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Backend error (${response.status}): ${errorText}`);
     }
-  </div>
-
-  ${
-    result.technical_explanation
-      ? `
-    <div class="result-section">
-      <h4>🔬 Technical Explanation</h4>
-      <p id="technicalExplanationText"></p>
-    </div>
-  `
-      : ""
+    
+    const data = await response.json();
+    console.log('✓ Analysis complete:', data);
+    
+    lastAnalysisResult = data;
+    lastReportId = data.report_id;
+    
+    // Hide loader before showing results
+    Loader.hide();
+    
+    // Render results
+    renderResults(data);
+    
+    // Show success toast
+    Toast.show(`Analysis complete: ${data.status}`, data.status === 'PASS' ? 'success' : 'warning');
+    
+  } catch (error) {
+    console.error('✕ Analysis error:', error);
+    Loader.hide();
+    Toast.show(error.message || 'Analysis failed', 'error');
+  } finally {
+    // Reset button state
+    analyzeBtnText.textContent = originalText;
+    analyzeBtn.disabled = false;
+    analysisInProgress = false;
   }
-
-  ${
-    result.human_explanation
-      ? `
-    <div class="result-section">
-      <h4>💡 Human-Readable Explanation</h4>
-      <p id="humanExplanationText"></p>
-    </div>
-  `
-      : ""
-  }
-
-  ${
-    result.ai_solution
-      ? `
-    <div class="result-section">
-      <h4>🛠️ AI Solution</h4>
-      <p id="aiSolutionText"></p>
-    </div>
-  `
-      : ""
-  }
-
-  <div class="result-section">
-    <h4>📊 Technical Details</h4>
-    <pre style="background:#1e293b;padding:1rem;border-radius:8px;overflow-x:auto;">
-${JSON.stringify(result.semantic_signals, null, 2)}
-    </pre>
-  </div>
-
-  <details style="margin-top:1rem;">
-    <summary style="cursor:pointer;font-weight:600;padding:0.5rem;background:#1e293b;border-radius:4px;">
-      📄 View Full JSON Report
-    </summary>
-    <pre style="margin-top:0.5rem;background:#0f172a;padding:1rem;border-radius:8px;overflow-x:auto;max-height:400px;">
-${JSON.stringify(result, null, 2)}
-    </pre>
-  </details>
-</div>
-  `;
-
-  // Render base HTML
-  box.innerHTML = formattedResult;
-
-  // ✅ SAFE text injection
-  const techEl = document.getElementById("technicalExplanationText");
-  if (techEl) techEl.textContent = result.technical_explanation || "";
-
-  const humanEl = document.getElementById("humanExplanationText");
-  if (humanEl) humanEl.textContent = result.human_explanation || "";
-
-  const aiEl = document.getElementById("aiSolutionText");
-  if (aiEl) aiEl.textContent = result.ai_solution || "";
-
-  el("downloadJsonBtn") && (el("downloadJsonBtn").style.display = "inline-flex");
-  el("downloadPdfBtn") && (el("downloadPdfBtn").style.display = "inline-flex");
-
-  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-/* ===============================
-   DOWNLOADS
-=============================== */
+// ========================================
+// Render Results
+// ========================================
+function renderResults(data) {
+  const resultsSection = $('resultsSection');
+  const resultBox = $('resultBox');
+  
+  if (!resultBox || !resultsSection) return;
+  
+  resultsSection.style.display = 'block';
+  
+  // Set status class
+  resultBox.className = `result-container status-${data.status.toLowerCase()}`;
+  
+  // Build result HTML
+  const html = `
+    <div class="result-status-header">
+      <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem;">Analysis Complete</h3>
+      <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem;">
+        <span style="display: inline-block; padding: 0.5rem 1rem; background: ${data.status === 'PASS' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; border: 1px solid ${data.status === 'PASS' ? 'var(--color-success)' : 'var(--color-error)'}; border-radius: 20px; font-weight: 700; color: ${data.status === 'PASS' ? 'var(--color-success)' : 'var(--color-error)'}; letter-spacing: 0.05em;">${data.status}</span>
+        <span style="color: var(--color-text-tertiary); font-size: 0.875rem;">Risk Score: <strong style="color: var(--color-text-primary);">${data.risk_score}/100</strong></span>
+        <span style="color: var(--color-text-tertiary); font-size: 0.875rem;">Provider: <strong style="color: var(--color-text-primary);">${data.ai_provider}</strong></span>
+      </div>
+    </div>
+    
+    ${data.analyzer_findings && data.analyzer_findings.length > 0 ? `
+      <div style="margin-bottom: 2rem;">
+        <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Analysis Findings</h4>
+        ${data.analyzer_findings.map(f => `
+          <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <strong style="color: var(--color-text-primary);">${f.name}</strong>
+              <span style="padding: 0.25rem 0.75rem; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--color-error); border-radius: 12px; font-size: 0.75rem; color: var(--color-error); font-weight: 600;">Risk: ${f.risk}</span>
+            </div>
+            <ul style="margin: 0; padding-left: 1.5rem; color: var(--color-text-secondary);">
+              ${f.findings.map(finding => `<li style="margin: 0.5rem 0;">${escapeHtml(finding)}</li>`).join('')}
+            </ul>
+          </div>
+        `).join('')}
+      </div>
+    ` : `
+      <div style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid var(--color-success); border-radius: 10px; text-align: center;">
+        <p style="color: var(--color-success); font-weight: 600;">✓ No issues detected</p>
+      </div>
+    `}
+    
+    ${data.technical_explanation ? `
+      <div style="margin-bottom: 2rem;">
+        <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Technical Explanation</h4>
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
+          <p style="color: var(--color-text-secondary); line-height: 1.8;">${escapeHtml(data.technical_explanation)}</p>
+        </div>
+      </div>
+    ` : ''}
+    
+    ${data.human_explanation ? `
+      <div style="margin-bottom: 2rem;">
+        <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Human-Readable Explanation</h4>
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
+          <p style="color: var(--color-text-secondary); line-height: 1.8;">${escapeHtml(data.human_explanation)}</p>
+        </div>
+      </div>
+    ` : ''}
+    
+    ${data.ai_solution ? `
+      <div style="margin-bottom: 2rem;">
+        <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">AI Recommendations</h4>
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
+          <p style="color: var(--color-text-secondary); line-height: 1.8;">${escapeHtml(data.ai_solution)}</p>
+        </div>
+      </div>
+    ` : ''}
+    
+    <details style="margin-top: 2rem;">
+      <summary style="cursor: pointer; font-weight: 600; padding: 1rem; background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-primary);">
+        View Technical Details
+      </summary>
+      <pre style="margin-top: 1rem; padding: 1.5rem; background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-text-tertiary);">${JSON.stringify(data.semantic_signals || {}, null, 2)}</pre>
+    </details>
+  `;
+  
+  resultBox.innerHTML = html;
+  
+  // Show download buttons
+  $('downloadJsonBtn').style.display = 'flex';
+  $('downloadPdfBtn').style.display = 'flex';
+  
+  // Scroll to results
+  resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ========================================
+// Download Reports
+// ========================================
 function downloadJSON() {
   if (!lastReportId) {
-    showToast('Run analysis first to download report', 'warning');
+    Toast.show('No analysis report available', 'warning');
     return;
   }
-  showToast('Downloading JSON report...', 'info');
-  window.open(`${API_BASE}/report/json/${lastReportId}`, "_blank");
+  Toast.show('Downloading JSON report...', 'info');
+  window.open(`${API_BASE}/report/json/${lastReportId}`, '_blank');
 }
 
 function downloadPDF() {
   if (!lastReportId) {
-    showToast('Run analysis first to download report', 'warning');
+    Toast.show('No analysis report available', 'warning');
     return;
   }
-  showToast('Downloading PDF report...', 'info');
-  window.open(`${API_BASE}/report/pdf/${lastReportId}`, "_blank");
+  Toast.show('Downloading PDF report...', 'info');
+  window.open(`${API_BASE}/report/pdf/${lastReportId}`, '_blank');
 }
 
-/* ===============================
-   ✨ NEW: Scroll to Top
-=============================== */
-function handleScroll() {
-  const scrollBtn = el('scrollToTop');
-  if (!scrollBtn) return;
+// ========================================
+// Utility Functions
+// ========================================
+function escapeHtml(text) {
+  if (typeof text !== 'string') return text;
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ========================================
+// Initialize Application
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('═'.repeat(60));
+  console.log('CRONOS Professional v3.2 - Initializing');
+  console.log('API Base:', API_BASE);
+  console.log('═'.repeat(60));
   
-  if (window.scrollY > 300) {
-    scrollBtn.style.display = 'block';
-  } else {
-    scrollBtn.style.display = 'none';
-  }
-}
-
-function scrollToTop() {
-  window.scrollTo({
-    top: 0,
-    behavior: 'smooth'
-  });
-}
-
-/* ===============================
-   ✨ NEW: Form Field Tracking
-=============================== */
-function trackFieldCompletion() {
-  const sourceCode = el("sourceCode")?.value.trim();
-  const expectedOutput = el("expectedOutput")?.value.trim();
+  // Initialize components
+  Toast.init();
+  Loader.init();
+  CharCounter.initAll();
   
-  if (sourceCode && !expectedOutput) {
-    updateProgress(2);
-  } else if (sourceCode && expectedOutput) {
-    updateProgress(3);
-  } else if (sourceCode) {
-    updateProgress(1);
-  }
-}
-
-/* ===============================
-   INIT - ATTACH ALL EVENT LISTENERS
-=============================== */
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("✅ CRONOS Frontend v3.2 initializing...");
-  console.log("🔗 API Base:", API_BASE);
-
-  // ✨ Show welcome toast
+  // Test backend connection
   setTimeout(() => {
-    showToast('Welcome to CRONOS! Select an analysis mode to begin.', 'info');
-  }, 500);
-
-  // Mode selection
-  const modeButtons = document.querySelectorAll(".mode-select-btn");
-  modeButtons.forEach(btn => {
-    btn.addEventListener("click", function() {
-      const mode = this.getAttribute("data-mode");
+    testBackendConnection();
+  }, 1000);
+  
+  // Mode selection buttons
+  $$('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const mode = this.getAttribute('data-mode');
       selectMode(mode);
     });
   });
-
+  
   // Navigation buttons
-  const backBtn = el("backToModeBtn");
-  backBtn && backBtn.addEventListener("click", goBackToModeSelection);
-
-  const analyzeBtn = el("analyzeBtn");
-  analyzeBtn && analyzeBtn.addEventListener("click", e => {
+  $('backToModeBtn')?.addEventListener('click', goBackToModeSelection);
+  $('clearAllBtn')?.addEventListener('click', () => {
+    if (confirm('Clear all fields?')) {
+      clearAllFields();
+      Toast.show('All fields cleared', 'success');
+    }
+  });
+  
+  // Analysis button
+  $('analyzeBtn')?.addEventListener('click', (e) => {
     e.preventDefault();
-    analyzeChange();
+    runAnalysis();
   });
-
-  // ✨ NEW: Clear all button
-  const clearBtn = el("clearAllBtn");
-  clearBtn && clearBtn.addEventListener("click", clearAllFields);
-
+  
   // Download buttons
-  el("downloadJsonBtn")?.addEventListener("click", downloadJSON);
-  el("downloadPdfBtn")?.addEventListener("click", downloadPDF);
-
-  // ✨ NEW: Scroll to top button
-  const scrollBtn = el("scrollToTop");
-  scrollBtn && scrollBtn.addEventListener("click", scrollToTop);
-  window.addEventListener("scroll", handleScroll);
-
-  // Textarea auto-resize and character counters
-  document.querySelectorAll("textarea").forEach(t => {
-    autoResize(t);
+  $('downloadJsonBtn')?.addEventListener('click', downloadJSON);
+  $('downloadPdfBtn')?.addEventListener('click', downloadPDF);
+  
+  // Textarea auto-resize and character counting
+  $$('textarea.code-input').forEach(textarea => {
+    autoResize(textarea);
     
-    t.addEventListener("input", () => {
-      autoResize(t);
+    textarea.addEventListener('input', () => {
+      autoResize(textarea);
+      CharCounter.update(textarea.id);
       
-      // ✨ Update character counter
-      const counterId = t.id + 'Counter';
-      updateCharCounter(t.id, counterId);
+      // Update progress based on filled fields
+      const sourceCode = $('sourceCode')?.value.trim();
+      const expectedOutput = $('expectedOutput')?.value.trim();
       
-      // ✨ Track progress
-      trackFieldCompletion();
+      if (sourceCode && expectedOutput) {
+        ProgressTracker.update(3);
+      } else if (sourceCode) {
+        ProgressTracker.update(2);
+      } else {
+        ProgressTracker.update(1);
+      }
     });
-
-    // ✨ Initialize character counters
-    const counterId = t.id + 'Counter';
-    updateCharCounter(t.id, counterId);
   });
-
-  // ✨ NEW: Add keyboard shortcuts
+  
+  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     // Ctrl/Cmd + Enter to analyze
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      if (currentMode && el('analyzeBtn')) {
+      if (currentMode && $('analyzeBtn')) {
         e.preventDefault();
-        analyzeChange();
+        runAnalysis();
       }
     }
     
@@ -587,17 +571,10 @@ document.addEventListener("DOMContentLoaded", () => {
       goBackToModeSelection();
     }
   });
-
-  console.log("✅ CRONOS Frontend ready!");
-  console.log("💡 Tip: Use Ctrl+Enter to analyze, Escape to go back");
+  
+  console.log('✓ CRONOS initialized successfully');
+  console.log('  Keyboard shortcuts:');
+  console.log('  • Ctrl+Enter - Run analysis');
+  console.log('  • Escape - Return to mode selection');
+  console.log('═'.repeat(60));
 });
-
-function escapeHTML(text) {
-  if (typeof text !== "string") return text;
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
