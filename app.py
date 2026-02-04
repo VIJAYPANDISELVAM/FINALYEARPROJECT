@@ -33,7 +33,7 @@ OPENROUTER_ENABLED = bool(OPENROUTER_API_KEY)
 # ===============================
 app = FastAPI(
     title="CRONOS – Dual Mode Code Analyzer",
-    version="3.3.0"
+    version="3.3.1"
 )
 
 # CORS Configuration
@@ -113,8 +113,13 @@ def normalize_risk(raw_risk: int) -> int:
     return 100
 
 def pass_fail_from_risk(risk: int) -> str:
-    """Determine PASS/FAIL based on risk threshold"""
-    return "PASS" if risk < 40 else "FAIL"
+    """Determine PASS/WARN/FAIL based on risk threshold"""
+    if risk < 30:
+        return "PASS"
+    elif risk < 60:
+        return "WARN"
+    else:
+        return "FAIL"
 
 # ===============================
 # CHANGE MODE ANALYZER (CORRECTED)
@@ -123,6 +128,7 @@ class ChangeAnalyzer:
     """
     Analyzes behavioral changes between old and new conditions.
     Uses AST structural comparison, not just text diff.
+    Distinguishes between boundary changes (low risk) and logical changes (high risk).
     """
     
     def analyze(self, old: str, new: str):
@@ -161,24 +167,67 @@ class ChangeAnalyzer:
         new_ast_dump = ast.dump(new_ast)
         ast_changed = old_ast_dump != new_ast_dump
 
-        # Determine risk based on AST change
-        risk = 50 if ast_changed else 30
+        # Clean versions for comparison
+        old_clean = old.replace(" ", "").lower()
+        new_clean = new.replace(" ", "").lower()
+
+        # SMART RISK SCORING (distinguishes types of changes)
+        change_type = "unknown"
+        
+        # Check for boundary changes (LOW RISK)
+        if (">" in old_clean and ">=" in new_clean) or (">=" in old_clean and ">" in new_clean):
+            risk = 20
+            change_type = "boundary_adjustment"
+        elif ("<" in old_clean and "<=" in new_clean) or ("<=" in old_clean and "<" in new_clean):
+            risk = 20
+            change_type = "boundary_adjustment"
+        
+        # Check for logical inversions (HIGH RISK)
+        elif ("and" in old_clean and "or" in new_clean) or ("or" in old_clean and "and" in new_clean):
+            risk = 80
+            change_type = "logical_inversion"
+        
+        # Check for operator changes (MEDIUM-HIGH RISK)
+        elif ("==" in old_clean and "!=" in new_clean) or ("!=" in old_clean and "==" in new_clean):
+            risk = 70
+            change_type = "equality_inversion"
+        
+        # Completely different logic (HIGH RISK)
+        elif ast_changed:
+            risk = 60
+            change_type = "structural_change"
+        
+        # Text-only change (LOW RISK)
+        else:
+            risk = 30
+            change_type = "minor_change"
+
+        # Dynamic finding text based on change type
+        if change_type == "boundary_adjustment":
+            finding_text = "Minor boundary adjustment — behavior mostly preserved"
+        elif change_type == "logical_inversion":
+            finding_text = "High-risk logical operator change detected (AND/OR)"
+        elif change_type == "equality_inversion":
+            finding_text = "High-risk equality operator change detected (==/!=)"
+        elif change_type == "structural_change":
+            finding_text = "Potential behavioral shift detected — structural AST change"
+        else:
+            finding_text = "Minor modification detected"
 
         signals = {
             "semantic_diff": True,
             "old_hash": old_hash,
             "new_hash": new_hash,
             "ast_changed": ast_changed,
-            "structural_change": ast_changed
+            "change_type": change_type,
+            "old_condition": old,
+            "new_condition": new
         }
 
         findings = [
             AnalyzerResult(
                 name="ConditionShift",
-                findings=[
-                    "Behavior may change due to structural AST difference" if ast_changed 
-                    else "Text changed but AST structure similar"
-                ],
+                findings=[finding_text],
                 risk=risk,
                 details=signals
             )
@@ -548,14 +597,20 @@ async def health():
     """API health check and information"""
     return {
         "status": "ok",
-        "service": "CRONOS API v3.3.0 - CORRECTED LOGIC",
+        "service": "CRONOS API v3.3.1 - SMART RISK SCORING",
         "cors": "ALLOW ALL (testing mode)",
         "improvements": [
-            "CHANGE mode: AST structural comparison (not text diff)",
+            "CHANGE mode: Smart risk scoring (boundary vs logical changes)",
             "COMPLIANCE mode: Identifier extraction (not AI guessing)",
             "AI: Explanation only (not decision-making)",
-            "Role-locked prompts for distinct outputs"
+            "Role-locked prompts for distinct outputs",
+            "Three-level status: PASS/WARN/FAIL"
         ],
+        "risk_levels": {
+            "0-29": "PASS - Safe changes",
+            "30-59": "WARN - Review recommended",
+            "60-100": "FAIL - High risk changes"
+        },
         "features": {
             "gemini": gemini_client is not None,
             "openrouter": OPENROUTER_ENABLED
@@ -574,7 +629,7 @@ async def health():
 async def startup_event():
     """Print startup information"""
     print("=" * 60)
-    print("✅ CRONOS v3.3.0 - CORRECTED LOGIC EDITION")
+    print("✅ CRONOS v3.3.1 - SMART RISK SCORING EDITION")
     print("=" * 60)
     print(f"📁 Report directory: {REPORT_DIR}")
     print(f"🤖 Gemini: {'✅ Enabled' if gemini_client else '❌ Disabled'}")
@@ -582,8 +637,14 @@ async def startup_event():
     print("🌐 CORS: ALLOW ALL (*) - TESTING MODE")
     print()
     print("🔧 CORRECTIONS APPLIED:")
-    print("  ✓ CHANGE mode: Real AST structural analysis")
+    print("  ✓ CHANGE mode: Smart risk scoring (boundary vs logical)")
     print("  ✓ COMPLIANCE mode: Identifier-based validation")
     print("  ✓ AI role separation: Explainer, not judge")
     print("  ✓ Role-locked prompts for distinct outputs")
+    print("  ✓ Three-level status: PASS/WARN/FAIL")
+    print()
+    print("📊 RISK LEVELS:")
+    print("  • 0-29:   PASS (Safe changes)")
+    print("  • 30-59:  WARN (Review recommended)")
+    print("  • 60-100: FAIL (High risk changes)")
     print("=" * 60)
