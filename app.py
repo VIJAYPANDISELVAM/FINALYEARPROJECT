@@ -1,7 +1,3 @@
-# ===============================
-# CRONOS v3.3 – CORRECTED LOGIC
-# Dual Mode Engine with Proper Separation
-# ===============================
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -19,18 +15,17 @@ from reportlab.pdfgen import canvas
 
 from google import genai
 
-# ===============================
 # API KEYS
-# ===============================
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 OPENROUTER_ENABLED = bool(OPENROUTER_API_KEY)
 
-# ===============================
+
 # APP SETUP
-# ===============================
+
 app = FastAPI(
     title="CRONOS – Dual Mode Code Analyzer",
     version="3.3.1"
@@ -46,15 +41,15 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# ===============================
+
 # STORAGE
-# ===============================
+
 REPORT_DIR = "reports"
 os.makedirs(REPORT_DIR, exist_ok=True)
 
-# ===============================
+
 # MODELS
-# ===============================
+
 class Constraint(BaseModel):
     no_behavior_change: bool = False
     allow_boundary_change: bool = False
@@ -72,10 +67,11 @@ class AnalyzeRequest(BaseModel):
     old_condition: str = ""
     new_condition: str = ""
     constraints: Constraint = Constraint()
+    technical_depth: str = "balanced"  # "academic", "balanced", "simple"
+    enable_deep_analysis: bool = False  # Enable comprehensive line-by-line analysis
 
-# ===============================
 # AST HELPERS
-# ===============================
+
 def safe_ast(code: str):
     """Parse code into AST with error handling"""
     try:
@@ -95,9 +91,9 @@ def extract_identifiers(tree) -> Set[str]:
             identifiers.add(node.id)
     return identifiers
 
-# ===============================
+
 # RISK NORMALIZATION
-# ===============================
+
 def normalize_risk(raw_risk: int) -> int:
     """Normalize risk to standard buckets: 0, 20, 40, 60, 80, 100"""
     if raw_risk <= 0:
@@ -121,9 +117,9 @@ def pass_fail_from_risk(risk: int) -> str:
     else:
         return "FAIL"
 
-# ===============================
+
 # CHANGE MODE ANALYZER (CORRECTED)
-# ===============================
+
 class ChangeAnalyzer:
     """
     Analyzes behavioral changes between old and new conditions.
@@ -235,9 +231,9 @@ class ChangeAnalyzer:
 
         return findings, risk, signals
 
-# ===============================
-# COMPLIANCE ANALYZER (CORRECTED)
-# ===============================
+
+# COMPLIANCE ANALYZER 
+
 class ComplianceAnalyzer:
     """
     Validates code against expected behavior contract.
@@ -307,9 +303,9 @@ class ComplianceAnalyzer:
             "expected_tokens": sorted(list(expected_words))
         }
 
-# ===============================
+
 # AI CALLS
-# ===============================
+
 def call_gemini(prompt: str):
     """Call Gemini API"""
     if not gemini_client:
@@ -363,21 +359,25 @@ def ai(prompt: str):
     
     return ("AI analysis unavailable. Please check API keys.", "None")
 
-# ===============================
-# ROLE-LOCKED PROMPTS (CORRECTED)
-# ===============================
-def technical_prompt(mode: str, signals: dict, findings: list, risk: int) -> str:
+
+# ROLE-LOCKED PROMPTS 
+
+def technical_prompt(mode: str, signals: dict, findings: list, risk: int, depth: str = "balanced") -> str:
     """
     Role: Senior Static Analysis Engineer
     Purpose: Explain WHY the issue exists technically
+    Depth: academic, balanced, or simple
     """
-    return f"""You are a senior static analysis engineer.
+    
+    if depth == "academic":
+        # For SIH / research / professors (heavy terminology)
+        return f"""You are a senior static analysis engineer presenting to academic peers.
 
 Your task:
-- Explain the issue ONLY in technical terms
-- Refer to code behavior, AST parsing, semantic analysis, and contracts
-- DO NOT simplify language
-- DO NOT give user-friendly explanations
+- Explain the issue using formal terminology
+- Reference: AST parsing, semantic analysis, control flow graphs (CFG), data flow analysis (DFA), invariants, contracts
+- Use precise technical language
+- DO NOT simplify for non-experts
 - DO NOT suggest fixes
 
 Context:
@@ -389,9 +389,55 @@ Risk Score: {risk}
 Explain:
 - What technically caused the issue
 - Which invariant or assumption was violated
-- Why the risk score is justified
+- Why the risk score is justified from a static analysis perspective
 
 Keep response under 150 words."""
+
+    elif depth == "simple":
+        # For product users / industry (minimal jargon)
+        return f"""You are a code reviewer explaining to a developer.
+
+Your task:
+- Explain what changed in the code
+- Keep it practical and clear
+- Avoid heavy academic terms (no CFG, DFA, invariants unless necessary)
+- Focus on what matters for code quality
+
+Context:
+Mode: {mode}
+What was detected: {json.dumps([f.dict() if hasattr(f, 'dict') else f for f in findings], indent=2)}
+Risk Score: {risk}
+
+Explain:
+- What changed and why it matters
+- What could go wrong
+- Why this got the risk score it did
+
+Keep response under 100 words. Be direct and practical."""
+
+    else:  # balanced (default)
+        # Middle ground - clear but still technical
+        return f"""You are a senior static analysis engineer.
+
+Your task:
+- Explain the issue in clear technical terms
+- Reference code behavior, AST analysis, and semantic checks
+- Balance precision with readability
+- DO NOT oversimplify or use excessive jargon
+- DO NOT suggest fixes
+
+Context:
+Mode: {mode}
+Signals: {json.dumps(signals, indent=2)}
+Findings: {json.dumps([f.dict() if hasattr(f, 'dict') else f for f in findings], indent=2)}
+Risk Score: {risk}
+
+Explain:
+- What technically caused the issue
+- Which assumption or contract was violated
+- Why the risk score is justified
+
+Keep response under 120 words."""
 
 def human_prompt(findings: list, risk: int) -> str:
     """
@@ -416,7 +462,132 @@ Explain:
 
 Keep response under 100 words."""
 
-def compliance_solution_prompt(hash_code: str, expected: str, risk: int) -> str:
+def comprehensive_analysis_prompt(old_code: str, new_code: str) -> str:
+    """
+    Comprehensive line-by-line analysis prompt for CHANGE mode.
+    Used when user wants detailed change analysis.
+    """
+    return f"""You are an expert Python static analysis engine.  
+Your job is to perform a COMPLETE, line-by-line, structural, semantic, and behavioral comparison between two Python code versions.
+
+You must analyze and report EVERY change — no matter how small.
+
+
+INPUT
+
+OLD CODE:
+{old_code}
+
+NEW CODE:
+{new_code}
+
+
+YOUR TASK (MANDATORY)
+
+
+Compare OLD vs NEW code at these levels:
+
+1) SYNTAX-LEVEL CHANGES  
+- Keywords (if, for, while, try, except, return)
+- Indentation or block structure
+- Decorators, annotations, type hints
+- Comments affecting meaning
+- Formatting affecting execution
+
+2) OPERATOR-LEVEL CHANGES  
+- Comparison operators (>, >=, <, <=, ==, !=)
+- Logical operators (and/or/not)
+- Arithmetic operators (+, -, *, /, //, %, **)
+- Bitwise operators (&, |, ^, <<, >>)
+- Assignment operators (=, +=, -=)
+
+For each: Old operator → New operator → Impact
+
+3) CONTROL FLOW CHANGES  
+- if/elif/else conditions
+- Loop types (for → while)
+- Loop bounds/iteration logic
+- Break/continue/return behavior
+- Exception handling (try/except/finally)
+- Function call order
+
+4) FUNCTION & CLASS CHANGES  
+- New/removed functions
+- Signature changes (parameters, defaults, types)
+- Behavior changes inside functions
+- New/removed classes
+- Method changes
+- Constructor (__init__) changes
+- Inheritance changes
+
+5) LIBRARY & IMPORT CHANGES  
+- New/removed imports
+- Version-specific libraries
+- External dependencies
+
+6) DATA TYPE CHANGES  
+- Variable type changes (int → float, list → dict)
+- Structure changes (list → tuple)
+- Mutable vs immutable
+- Return type changes
+
+7) VARIABLE & STATE CHANGES  
+- New/removed variables
+- Scope changes (local → global)
+- Default value changes
+- Side effects introduced
+
+8) AST STRUCTURAL CHANGES  
+- AST structure changed?
+- Which nodes changed?
+- Semantic or cosmetic?
+
+9) RISK ASSESSMENT  
+For every change:
+- LOW: Cosmetic/safe refactor
+- MEDIUM: Possible behavior change
+- HIGH: Likely breaking change
+
+=========================================
+OUTPUT FORMAT (STRICT)
+=========================================
+
+### 🔹 SUMMARY  
+Brief overview of total changes.
+
+### 🔹 DETAILED CHANGE LIST  
+For each change:
+- Location (line/function)
+- Old behavior
+- New behavior
+- Type of change
+- Risk level
+- Why this matters
+
+### 🔹 CONTROL FLOW IMPACT  
+How execution paths changed.
+
+### 🔹 DATA & STATE IMPACT  
+How data flow changed.
+
+### 🔹 LIBRARY IMPACT  
+Dependency risks.
+
+### 🔹 FINAL RISK SCORE (0–100)  
+Overall score with justification.
+
+
+RULES
+
+- Do NOT summarize loosely
+- Do NOT skip small changes
+- Treat every line as important
+- Be skeptical and critical
+- Prefer accuracy over brevity
+- Never assume intent — only analyze what you see
+- If unclear, say "UNCERTAIN"
+
+Analyze now."""
     """
     Role: Senior Software Architect
     Purpose: Strategic guidance, not code
@@ -440,9 +611,9 @@ Provide:
 
 Keep it high-level and actionable. Under 120 words."""
 
-# ===============================
+
 # ANALYZE ENDPOINT
-# ===============================
+
 @app.post("/analyze")
 async def analyze(req: AnalyzeRequest):
     """
@@ -463,8 +634,16 @@ async def analyze(req: AnalyzeRequest):
 
             risk = normalize_risk(raw_risk)
 
-            # AI explains (does not decide)
-            tech, provider = ai(technical_prompt(mode, signals, findings, risk))
+            # Choose analysis depth
+            if req.enable_deep_analysis:
+                # Comprehensive line-by-line analysis
+                comprehensive, provider = ai(comprehensive_analysis_prompt(req.old_condition, req.new_condition))
+                tech = comprehensive  # Deep analysis serves as technical explanation
+            else:
+                # Standard technical explanation
+                tech, provider = ai(technical_prompt(mode, signals, findings, risk, req.technical_depth))
+            
+            # Always generate human explanation
             human, _ = ai(human_prompt(findings, risk))
 
             result = {
@@ -476,6 +655,8 @@ async def analyze(req: AnalyzeRequest):
                 "technical_explanation": tech,
                 "human_explanation": human,
                 "ai_provider": provider,
+                "technical_depth": req.technical_depth,
+                "deep_analysis_enabled": req.enable_deep_analysis,
                 "report_id": report_id,
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
@@ -490,8 +671,8 @@ async def analyze(req: AnalyzeRequest):
 
             risk = normalize_risk(raw_risk)
 
-            # AI explains (does not decide)
-            tech, provider = ai(technical_prompt(mode, signals, findings, risk))
+            # AI explains (does not decide) - with configurable depth
+            tech, provider = ai(technical_prompt(mode, signals, findings, risk, req.technical_depth))
             solution, _ = ai(
                 compliance_solution_prompt(
                     signals["source_hash"],
@@ -509,6 +690,8 @@ async def analyze(req: AnalyzeRequest):
                 "technical_explanation": tech,
                 "ai_solution": solution,
                 "ai_provider": provider,
+                "technical_depth": req.technical_depth,
+                "deep_analysis_enabled": req.enable_deep_analysis,  # Added for consistency
                 "report_id": report_id,
                 "timestamp": datetime.utcnow().isoformat() + "Z"
             }
@@ -527,9 +710,9 @@ async def analyze(req: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(500, f"Analysis failed: {str(e)}")
 
-# ===============================
+
 # DOWNLOAD JSON
-# ===============================
+
 @app.get("/report/json/{report_id}")
 async def download_json(report_id: str):
     """Download analysis report as JSON"""
@@ -545,9 +728,8 @@ async def download_json(report_id: str):
             }
         )
 
-# ===============================
 # DOWNLOAD PDF
-# ===============================
+
 @app.get("/report/pdf/{report_id}")
 async def download_pdf(report_id: str):
     """Generate and download analysis report as PDF"""
@@ -589,9 +771,9 @@ async def download_pdf(report_id: str):
         }
     )
 
-# ===============================
+
 # HEALTH CHECK
-# ===============================
+
 @app.get("/")
 async def health():
     """API health check and information"""
@@ -604,12 +786,23 @@ async def health():
             "COMPLIANCE mode: Identifier extraction (not AI guessing)",
             "AI: Explanation only (not decision-making)",
             "Role-locked prompts for distinct outputs",
-            "Three-level status: PASS/WARN/FAIL"
+            "Three-level status: PASS/WARN/FAIL",
+            "Configurable technical depth: academic/balanced/simple",
+            "Deep analysis mode: Comprehensive line-by-line comparison"
         ],
         "risk_levels": {
             "0-29": "PASS - Safe changes",
             "30-59": "WARN - Review recommended",
             "60-100": "FAIL - High risk changes"
+        },
+        "technical_depth_options": {
+            "academic": "Heavy terminology (CFG, DFA, invariants) - for SIH/research/professors",
+            "balanced": "Clear technical language - default, good for most users",
+            "simple": "Minimal jargon - for product users/industry"
+        },
+        "analysis_modes": {
+            "standard": "Fast analysis with smart risk scoring (enable_deep_analysis: false)",
+            "deep": "Comprehensive line-by-line comparison covering syntax, operators, control flow, functions, imports, data types, variables, AST, and detailed risk assessment (enable_deep_analysis: true)"
         },
         "features": {
             "gemini": gemini_client is not None,
@@ -619,12 +812,19 @@ async def health():
             "POST /analyze",
             "GET /report/json/{id}",
             "GET /report/pdf/{id}"
-        ]
+        ],
+        "example_request": {
+            "mode": "CHANGE",
+            "old_condition": "x > 10",
+            "new_condition": "x >= 10",
+            "technical_depth": "balanced",
+            "enable_deep_analysis": False
+        }
     }
 
-# ===============================
+
 # STARTUP EVENT
-# ===============================
+
 @app.on_event("startup")
 async def startup_event():
     """Print startup information"""
@@ -636,12 +836,14 @@ async def startup_event():
     print(f"🤖 OpenRouter: {'✅ Enabled' if OPENROUTER_ENABLED else '❌ Disabled'}")
     print("🌐 CORS: ALLOW ALL (*) - TESTING MODE")
     print()
-    print("🔧 CORRECTIONS APPLIED:")
+    print("🔧 FEATURES:")
     print("  ✓ CHANGE mode: Smart risk scoring (boundary vs logical)")
     print("  ✓ COMPLIANCE mode: Identifier-based validation")
     print("  ✓ AI role separation: Explainer, not judge")
     print("  ✓ Role-locked prompts for distinct outputs")
     print("  ✓ Three-level status: PASS/WARN/FAIL")
+    print("  ✓ Technical depth: academic/balanced/simple")
+    print("  ✓ Deep analysis: Line-by-line comprehensive comparison")
     print()
     print("📊 RISK LEVELS:")
     print("  • 0-29:   PASS (Safe changes)")
