@@ -1,22 +1,18 @@
 # ===============================
-# CRONOS v3.2 – Dual Mode Engine
-# BULLETPROOF CORS CONFIGURATION
-# ===============================
-# ===============================
-# CRONOS v3.2 – Dual Mode Engine
-# BULLETPROOF CORS CONFIGURATION
+# CRONOS v3.3 – CORRECTED LOGIC
+# Dual Mode Engine with Proper Separation
 # ===============================
 from dotenv import load_dotenv
 load_dotenv()
 
 import os, json, ast, hashlib, uuid, requests
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 from io import BytesIO
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -37,15 +33,14 @@ OPENROUTER_ENABLED = bool(OPENROUTER_API_KEY)
 # ===============================
 app = FastAPI(
     title="CRONOS – Dual Mode Code Analyzer",
-    version="3.2.3"
+    version="3.3.0"
 )
 
-# ✅ BULLETPROOF CORS - ALLOW ALL ORIGINS (FOR TESTING)
-# Change this to specific origins in production
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ✅ ALLOW ALL (temporary for testing)
-    allow_credentials=False,  # ✅ Must be False when allow_origins is "*"
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
@@ -82,18 +77,29 @@ class AnalyzeRequest(BaseModel):
 # AST HELPERS
 # ===============================
 def safe_ast(code: str):
+    """Parse code into AST with error handling"""
     try:
         return ast.parse(code)
     except Exception as e:
         raise ValueError(f"AST Parse Error: {str(e)}")
 
 def hash_source(code: str) -> str:
+    """Generate SHA256 hash of source code"""
     return hashlib.sha256(code.encode()).hexdigest()
 
+def extract_identifiers(tree) -> Set[str]:
+    """Extract all identifier names from AST"""
+    identifiers = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            identifiers.add(node.id)
+    return identifiers
+
 # ===============================
-# RISK NORMALIZATION (ADDED)
+# RISK NORMALIZATION
 # ===============================
 def normalize_risk(raw_risk: int) -> int:
+    """Normalize risk to standard buckets: 0, 20, 40, 60, 80, 100"""
     if raw_risk <= 0:
         return 0
     if raw_risk <= 20:
@@ -107,34 +113,106 @@ def normalize_risk(raw_risk: int) -> int:
     return 100
 
 def pass_fail_from_risk(risk: int) -> str:
+    """Determine PASS/FAIL based on risk threshold"""
     return "PASS" if risk < 40 else "FAIL"
 
 # ===============================
-# CHANGE MODE ANALYZER
+# CHANGE MODE ANALYZER (CORRECTED)
 # ===============================
 class ChangeAnalyzer:
+    """
+    Analyzes behavioral changes between old and new conditions.
+    Uses AST structural comparison, not just text diff.
+    """
+    
     def analyze(self, old: str, new: str):
-        if old.strip() == new.strip():
-            return [], 0, {"semantic_diff": False}
+        # Validate inputs
+        if not old.strip() or not new.strip():
+            return [], 0, {"error": "Empty conditions provided"}
 
-        return [
+        # Parse both conditions
+        try:
+            old_ast = safe_ast(old)
+            new_ast = safe_ast(new)
+        except ValueError as e:
+            return [
+                AnalyzerResult(
+                    name="ParseError",
+                    findings=[str(e)],
+                    risk=20,
+                    details={"error": str(e)}
+                )
+            ], 20, {"parse_error": True}
+
+        # Hash comparison - if identical, no change
+        old_hash = hash_source(old)
+        new_hash = hash_source(new)
+        
+        if old_hash == new_hash:
+            return [], 0, {
+                "semantic_diff": False,
+                "old_hash": old_hash,
+                "new_hash": new_hash,
+                "ast_changed": False
+            }
+
+        # AST structural comparison (REAL ANALYSIS)
+        old_ast_dump = ast.dump(old_ast)
+        new_ast_dump = ast.dump(new_ast)
+        ast_changed = old_ast_dump != new_ast_dump
+
+        # Determine risk based on AST change
+        risk = 50 if ast_changed else 30
+
+        signals = {
+            "semantic_diff": True,
+            "old_hash": old_hash,
+            "new_hash": new_hash,
+            "ast_changed": ast_changed,
+            "structural_change": ast_changed
+        }
+
+        findings = [
             AnalyzerResult(
-                name="SemanticChange",
-                findings=["Old and new conditions differ"],
-                risk=40,
-                details={"change_detected": True}
+                name="ConditionShift",
+                findings=[
+                    "Behavior may change due to structural AST difference" if ast_changed 
+                    else "Text changed but AST structure similar"
+                ],
+                risk=risk,
+                details=signals
             )
-        ], 40, {"semantic_diff": True}
+        ]
+
+        return findings, risk, signals
 
 # ===============================
-# COMPLIANCE ANALYZER (FIXED)
+# COMPLIANCE ANALYZER (CORRECTED)
 # ===============================
 class ComplianceAnalyzer:
+    """
+    Validates code against expected behavior contract.
+    Uses AST identifier extraction, not AI guessing.
+    AI is used only for explanation, not decision.
+    """
+    
     def analyze(self, code: str, expected: str):
-        safe_ast(code)
+        # Parse code
+        try:
+            tree = safe_ast(code)
+        except ValueError as e:
+            return [
+                AnalyzerResult(
+                    name="ParseError",
+                    findings=[str(e)],
+                    risk=20,
+                    details={"error": str(e)}
+                )
+            ], 20, {"parse_error": True}
+        
         src_hash = hash_source(code)
 
-        # ✅ FIXED: If no expected output specified, pass with risk 0
+        # If no contract specified, pass with risk 0
         if not expected.strip():
             return [], 0, {
                 "semantic_similarity": 1.0,
@@ -143,83 +221,48 @@ class ComplianceAnalyzer:
                 "comparison_method": "no_contract_specified"
             }
 
-        # ✅ FIXED: Use AI to determine if code matches expected behavior
-        comparison_prompt = f"""
-You are analyzing whether Python code produces the expected output.
-
-CODE:
-{code}
-
-EXPECTED OUTPUT/BEHAVIOR:
-{expected}
-
-Task: Determine if the CODE will produce or match the EXPECTED OUTPUT/BEHAVIOR.
-- Consider what the code actually does (variables, functions, print statements)
-- Compare it with what is expected
-- If they are different or don't match, respond with "MISMATCH"
-- If they match or are equivalent, respond with "MATCH"
-
-Respond with ONLY one word: "MATCH" or "MISMATCH"
-"""
+        # Extract identifiers from code (REAL ANALYSIS)
+        identifiers = extract_identifiers(tree)
         
-        try:
-            ai_response, provider = ai(comparison_prompt)
-            # More strict matching: only consider it a match if AI explicitly says MATCH
-            # and doesn't mention MISMATCH
-            response_upper = ai_response.upper()
-            matches = "MATCH" in response_upper and "MISMATCH" not in response_upper
-            ai_comparison_result = ai_response
-        except Exception as e:
-            # Fallback: Enhanced text comparison
-            code_normalized = code.strip().lower()
-            expected_normalized = expected.strip().lower()
-            
-            # Check if expected behavior is NOT in code (indicates mismatch)
-            # For example: code has "print(age)" but expected has "print(name)"
-            matches = False
-            
-            # Extract key identifiers from expected
-            expected_identifiers = set(expected_normalized.replace('(', ' ').replace(')', ' ').replace(',', ' ').split())
-            code_identifiers = set(code_normalized.replace('(', ' ').replace(')', ' ').replace(',', ' ').split())
-            
-            # Check if expected identifiers are in code
-            if expected_identifiers.issubset(code_identifiers):
-                matches = True
-            
-            provider = "Fallback"
-            ai_comparison_result = f"Fallback analysis: expected_ids={expected_identifiers}, code_ids={code_identifiers}"
+        # Tokenize expected behavior
+        expected_words = set(expected.lower().split())
+        
+        # Check if expected tokens appear in code identifiers
+        # This is a structural match, not text comparison
+        matches = bool(identifiers.intersection(expected_words))
 
-        results = []
-        risk = 0
+        # Determine risk
+        risk = 60 if not matches else 0
 
+        findings = []
         if not matches:
-            risk = 60
-            results.append(
+            findings.append(
                 AnalyzerResult(
                     name="ContractViolation",
-                    findings=["Code does not produce expected output"],
+                    findings=["Expected behavior not aligned with code semantics"],
                     risk=60,
                     details={
-                        "expected": expected,
-                        "ai_comparison": ai_comparison_result,
-                        "match_result": "mismatch"
+                        "identifiers_found": sorted(list(identifiers)),
+                        "expected_tokens": sorted(list(expected_words)),
+                        "intersection": sorted(list(identifiers.intersection(expected_words)))
                     }
                 )
             )
-        
-        similarity = 1.0 if matches else 0.0
 
-        return results, risk, {
-            "semantic_similarity": similarity,
+        return findings, risk, {
+            "semantic_similarity": 1.0 if matches else 0.2,
             "invariant_broken": not matches,
             "source_hash": src_hash,
-            "comparison_method": "ai_analysis"
+            "comparison_method": "ast_identifier_match",
+            "identifiers_in_code": sorted(list(identifiers)),
+            "expected_tokens": sorted(list(expected_words))
         }
 
 # ===============================
 # AI CALLS
 # ===============================
 def call_gemini(prompt: str):
+    """Call Gemini API"""
     if not gemini_client:
         raise Exception("Gemini not configured")
 
@@ -233,6 +276,7 @@ def call_gemini(prompt: str):
         raise Exception(f"Gemini API Error: {str(e)}")
 
 def call_openrouter(prompt: str):
+    """Call OpenRouter API"""
     try:
         r = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -255,6 +299,7 @@ def call_openrouter(prompt: str):
         raise Exception(f"OpenRouter API Error: {str(e)}")
 
 def ai(prompt: str):
+    """Smart AI fallback handler"""
     if gemini_client:
         try:
             return call_gemini(prompt)
@@ -270,43 +315,97 @@ def ai(prompt: str):
     return ("AI analysis unavailable. Please check API keys.", "None")
 
 # ===============================
-# AI PROMPTS
+# ROLE-LOCKED PROMPTS (CORRECTED)
 # ===============================
-def technical_prompt(mode, signals, findings, risk):
-    return f"""
+def technical_prompt(mode: str, signals: dict, findings: list, risk: int) -> str:
+    """
+    Role: Senior Static Analysis Engineer
+    Purpose: Explain WHY the issue exists technically
+    """
+    return f"""You are a senior static analysis engineer.
+
+Your task:
+- Explain the issue ONLY in technical terms
+- Refer to code behavior, AST parsing, semantic analysis, and contracts
+- DO NOT simplify language
+- DO NOT give user-friendly explanations
+- DO NOT suggest fixes
+
+Context:
 Mode: {mode}
-Signals: {signals}
-Findings: {findings}
+Signals: {json.dumps(signals, indent=2)}
+Findings: {json.dumps([f.dict() if hasattr(f, 'dict') else f for f in findings], indent=2)}
+Risk Score: {risk}
 
-Explain the technical reasoning clearly and justify why the risk score is {risk}.
-"""
+Explain:
+- What technically caused the issue
+- Which invariant or assumption was violated
+- Why the risk score is justified
 
-def human_prompt(findings, risk):
-    return f"""
-Findings: {findings}
+Keep response under 150 words."""
 
-Explain impact in simple human language considering the risk score {risk}.
-"""
+def human_prompt(findings: list, risk: int) -> str:
+    """
+    Role: Product/QA Stakeholder
+    Purpose: Explain impact to user/business
+    """
+    return f"""You are explaining this to a non-technical stakeholder.
 
-def compliance_solution_prompt(hash_code, expected, risk):
-    return f"""
-Source Hash: {hash_code}
-Expected Contract: {expected}
+Rules:
+- NO programming terms
+- NO AST, NO variables, NO functions
+- Use simple language
+- Explain consequences, not causes
 
-Suggest a high-level corrective strategy considering the risk score {risk}.
-No code implementation.
-"""
+Findings: {json.dumps([f.dict() if hasattr(f, 'dict') else f for f in findings], indent=2)}
+Risk Score: {risk}
+
+Explain:
+- What can go wrong
+- Why this matters
+- What level of attention this needs
+
+Keep response under 100 words."""
+
+def compliance_solution_prompt(hash_code: str, expected: str, risk: int) -> str:
+    """
+    Role: Senior Software Architect
+    Purpose: Strategic guidance, not code
+    """
+    return f"""You are a senior software architect.
+
+Context:
+- Code Hash: {hash_code}
+- Expected Behavior: {expected}
+- Risk Score: {risk}
+
+Rules:
+- Do NOT write code
+- Do NOT repeat the problem
+- Focus on strategy
+
+Provide:
+- What should be verified
+- What should be tested
+- What kind of change is required (logic, validation, contract)
+
+Keep it high-level and actionable. Under 120 words."""
 
 # ===============================
 # ANALYZE ENDPOINT
 # ===============================
 @app.post("/analyze")
 async def analyze(req: AnalyzeRequest):
+    """
+    Main analysis endpoint with corrected logic.
+    AI is used for EXPLANATION only, not DECISION.
+    """
     mode = req.mode.upper()
     report_id = str(uuid.uuid4())
 
     try:
         if mode == "CHANGE":
+            # CHANGE MODE: Analyze condition changes
             analyzer = ChangeAnalyzer()
             findings, raw_risk, signals = analyzer.analyze(
                 req.old_condition,
@@ -315,6 +414,7 @@ async def analyze(req: AnalyzeRequest):
 
             risk = normalize_risk(raw_risk)
 
+            # AI explains (does not decide)
             tech, provider = ai(technical_prompt(mode, signals, findings, risk))
             human, _ = ai(human_prompt(findings, risk))
 
@@ -332,6 +432,7 @@ async def analyze(req: AnalyzeRequest):
             }
 
         elif mode == "COMPLIANCE":
+            # COMPLIANCE MODE: Validate against contract
             analyzer = ComplianceAnalyzer()
             findings, raw_risk, signals = analyzer.analyze(
                 req.source_code,
@@ -340,6 +441,7 @@ async def analyze(req: AnalyzeRequest):
 
             risk = normalize_risk(raw_risk)
 
+            # AI explains (does not decide)
             tech, provider = ai(technical_prompt(mode, signals, findings, risk))
             solution, _ = ai(
                 compliance_solution_prompt(
@@ -381,6 +483,7 @@ async def analyze(req: AnalyzeRequest):
 # ===============================
 @app.get("/report/json/{report_id}")
 async def download_json(report_id: str):
+    """Download analysis report as JSON"""
     path = f"{REPORT_DIR}/{report_id}.json"
     if not os.path.exists(path):
         raise HTTPException(404, "Report not found")
@@ -398,6 +501,7 @@ async def download_json(report_id: str):
 # ===============================
 @app.get("/report/pdf/{report_id}")
 async def download_pdf(report_id: str):
+    """Generate and download analysis report as PDF"""
     json_path = f"{REPORT_DIR}/{report_id}.json"
     if not os.path.exists(json_path):
         raise HTTPException(404, "Report not found")
@@ -408,16 +512,21 @@ async def download_pdf(report_id: str):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
 
+    # Title
     c.setFont("Helvetica-Bold", 16)
     c.drawString(40, 800, "CRONOS Analysis Report")
-
+    
+    # Metadata
     c.setFont("Helvetica", 10)
     y = 770
+    
     for k, v in data.items():
-        c.drawString(40, y, f"{k}: {str(v)[:80]}")
+        text = f"{k}: {str(v)[:80]}"
+        c.drawString(40, y, text)
         y -= 14
         if y < 50:
             c.showPage()
+            c.setFont("Helvetica", 10)
             y = 800
 
     c.save()
@@ -436,18 +545,25 @@ async def download_pdf(report_id: str):
 # ===============================
 @app.get("/")
 async def health():
+    """API health check and information"""
     return {
         "status": "ok",
-        "service": "CRONOS API v3.2.3",
+        "service": "CRONOS API v3.3.0 - CORRECTED LOGIC",
         "cors": "ALLOW ALL (testing mode)",
+        "improvements": [
+            "CHANGE mode: AST structural comparison (not text diff)",
+            "COMPLIANCE mode: Identifier extraction (not AI guessing)",
+            "AI: Explanation only (not decision-making)",
+            "Role-locked prompts for distinct outputs"
+        ],
         "features": {
             "gemini": gemini_client is not None,
             "openrouter": OPENROUTER_ENABLED
         },
         "endpoints": [
-            "/analyze",
-            "/report/json/{id}",
-            "/report/pdf/{id}"
+            "POST /analyze",
+            "GET /report/json/{id}",
+            "GET /report/pdf/{id}"
         ]
     }
 
@@ -456,10 +572,18 @@ async def health():
 # ===============================
 @app.on_event("startup")
 async def startup_event():
-    print("=" * 50)
-    print("✅ CRONOS Backend Started")
+    """Print startup information"""
+    print("=" * 60)
+    print("✅ CRONOS v3.3.0 - CORRECTED LOGIC EDITION")
+    print("=" * 60)
     print(f"📁 Report directory: {REPORT_DIR}")
-    print(f"🤖 Gemini: {gemini_client is not None}")
-    print(f"🤖 OpenRouter: {OPENROUTER_ENABLED}")
+    print(f"🤖 Gemini: {'✅ Enabled' if gemini_client else '❌ Disabled'}")
+    print(f"🤖 OpenRouter: {'✅ Enabled' if OPENROUTER_ENABLED else '❌ Disabled'}")
     print("🌐 CORS: ALLOW ALL (*) - TESTING MODE")
-    print("=" * 50)
+    print()
+    print("🔧 CORRECTIONS APPLIED:")
+    print("  ✓ CHANGE mode: Real AST structural analysis")
+    print("  ✓ COMPLIANCE mode: Identifier-based validation")
+    print("  ✓ AI role separation: Explainer, not judge")
+    print("  ✓ Role-locked prompts for distinct outputs")
+    print("=" * 60)
