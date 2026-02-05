@@ -1,4 +1,3 @@
-```python
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -110,22 +109,21 @@ def normalize_risk(raw_risk: int) -> int:
     return 100
 
 def pass_fail_from_risk(risk: int) -> str:
-    """Determine PASS/WARN/FAIL based on risk threshold"""
-    if risk < 30:
+    """Determine PASS/WARN/FAIL based on fair risk thresholds"""
+    if risk <= 20:
         return "PASS"
-    elif risk < 60:
+    elif risk <= 50:
         return "WARN"
     else:
         return "FAIL"
 
 
-# CHANGE MODE ANALYZER (COMPREHENSIVE)
+# CHANGE MODE ANALYZER (COMPREHENSIVE & FAIR)
 
 class ChangeAnalyzer:
     """
     Analyzes behavioral changes between old and new conditions.
-    Uses comprehensive AST structural comparison with explicit classification
-    of operator, function, loop, library, data-type, and structural changes.
+    Uses comprehensive AST analysis with FAIR risk scoring.
     """
     
     def analyze(self, old: str, new: str):
@@ -173,9 +171,9 @@ class ChangeAnalyzer:
         risk_scores = []
         change_details = {}
 
-        # 1. OPERATOR CHANGES
+        # 1. OPERATOR CHANGES (Priority: High-impact first)
         operator_risk, operator_findings, operator_details = self._analyze_operators(
-            old, new, old_ast, new_ast, old_nodes, new_nodes
+            old, new, old_nodes, new_nodes
         )
         if operator_risk > 0:
             findings.extend(operator_findings)
@@ -184,7 +182,7 @@ class ChangeAnalyzer:
 
         # 2. FUNCTION CHANGES
         function_risk, function_findings, function_details = self._analyze_functions(
-            old_ast, new_ast, old_nodes, new_nodes
+            old_nodes, new_nodes
         )
         if function_risk > 0:
             findings.extend(function_findings)
@@ -193,7 +191,7 @@ class ChangeAnalyzer:
 
         # 3. LOOP CHANGES
         loop_risk, loop_findings, loop_details = self._analyze_loops(
-            old_ast, new_ast, old_nodes, new_nodes
+            old_nodes, new_nodes
         )
         if loop_risk > 0:
             findings.extend(loop_findings)
@@ -202,7 +200,7 @@ class ChangeAnalyzer:
 
         # 4. LIBRARY/IMPORT CHANGES
         library_risk, library_findings, library_details = self._analyze_imports(
-            old_ast, new_ast
+            old_nodes, new_nodes
         )
         if library_risk > 0:
             findings.extend(library_findings)
@@ -211,14 +209,23 @@ class ChangeAnalyzer:
 
         # 5. DATA TYPE CHANGES
         datatype_risk, datatype_findings, datatype_details = self._analyze_datatypes(
-            old_ast, new_ast, old_nodes, new_nodes
+            old_nodes, new_nodes
         )
         if datatype_risk > 0:
             findings.extend(datatype_findings)
             risk_scores.append(datatype_risk)
             change_details.update(datatype_details)
 
-        # 6. STRUCTURAL AST CHANGES (if not covered by above)
+        # 6. CONTROL FLOW CHANGES
+        control_risk, control_findings, control_details = self._analyze_control_flow(
+            old_nodes, new_nodes
+        )
+        if control_risk > 0:
+            findings.extend(control_findings)
+            risk_scores.append(control_risk)
+            change_details.update(control_details)
+
+        # 7. STRUCTURAL AST CHANGES (only if nothing else detected)
         if ast_changed and not risk_scores:
             structural_risk, structural_findings, structural_details = self._analyze_structural(
                 old_ast, new_ast, old_nodes, new_nodes
@@ -239,6 +246,8 @@ class ChangeAnalyzer:
             "ast_changed": ast_changed,
             "old_condition": old,
             "new_condition": new,
+            "categories_analyzed": len([r for r in risk_scores if r > 0]),
+            "total_findings": len(findings),
             **change_details
         }
 
@@ -256,7 +265,12 @@ class ChangeAnalyzer:
             'constants': [],
             'names': [],
             'imports': [],
-            'attributes': []
+            'attributes': [],
+            'assignments': [],
+            'if_nodes': [],
+            'try_nodes': [],
+            'breaks': 0,
+            'continues': 0
         }
         
         for node in ast.walk(tree):
@@ -269,6 +283,7 @@ class ChangeAnalyzer:
                 nodes['functions'].append({
                     'name': node.name,
                     'args': [arg.arg for arg in node.args.args],
+                    'defaults': len(node.args.defaults),
                     'returns': ast.unparse(node.returns) if node.returns else None
                 })
             elif isinstance(node, ast.Call):
@@ -277,18 +292,19 @@ class ChangeAnalyzer:
                 elif isinstance(node.func, ast.Attribute):
                     nodes['calls'].append(node.func.attr)
             elif isinstance(node, (ast.For, ast.While)):
-                nodes['loops'].append({
-                    'type': type(node).__name__,
-                    'target': ast.unparse(node.target) if isinstance(node, ast.For) else None,
-                    'iter': ast.unparse(node.iter) if isinstance(node, ast.For) else None,
-                    'test': ast.unparse(node.test) if isinstance(node, ast.While) else None
-                })
+                loop_info = {'type': type(node).__name__}
+                if isinstance(node, ast.For):
+                    loop_info['target'] = ast.unparse(node.target) if hasattr(node, 'target') else None
+                    loop_info['iter'] = ast.unparse(node.iter) if hasattr(node, 'iter') else None
+                elif isinstance(node, ast.While):
+                    loop_info['test'] = ast.unparse(node.test) if hasattr(node, 'test') else None
+                nodes['loops'].append(loop_info)
             elif isinstance(node, ast.Return):
-                nodes['returns'].append(ast.unparse(node.value) if node.value else None)
+                nodes['returns'].append(ast.unparse(node.value) if node.value else "None")
             elif isinstance(node, ast.Constant):
                 nodes['constants'].append({
                     'type': type(node.value).__name__,
-                    'value': str(node.value)
+                    'value': str(node.value)[:50]
                 })
             elif isinstance(node, ast.Name):
                 nodes['names'].append(node.id)
@@ -297,14 +313,26 @@ class ChangeAnalyzer:
                     for alias in node.names:
                         nodes['imports'].append(alias.name)
                 else:
-                    nodes['imports'].append(node.module if node.module else 'relative')
+                    nodes['imports'].append(node.module if node.module else 'relative_import')
             elif isinstance(node, ast.Attribute):
                 nodes['attributes'].append(node.attr)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        nodes['assignments'].append(target.id)
+            elif isinstance(node, ast.If):
+                nodes['if_nodes'].append(ast.unparse(node.test) if hasattr(node, 'test') else 'if')
+            elif isinstance(node, ast.Try):
+                nodes['try_nodes'].append('try_except')
+            elif isinstance(node, ast.Break):
+                nodes['breaks'] += 1
+            elif isinstance(node, ast.Continue):
+                nodes['continues'] += 1
         
         return nodes
 
-    def _analyze_operators(self, old_code, new_code, old_ast, new_ast, old_nodes, new_nodes):
-        """Analyze operator changes"""
+    def _analyze_operators(self, old_code, new_code, old_nodes, new_nodes):
+        """Analyze operator changes with FAIR risk scoring"""
         findings = []
         risk = 0
         details = {}
@@ -314,26 +342,20 @@ class ChangeAnalyzer:
         old_bool = old_nodes['bool_ops']
         new_bool = new_nodes['bool_ops']
         
-        # BOUNDARY OPERATOR CHANGES (LOW RISK: 20)
+        # BOUNDARY OPERATOR CHANGES (VERY LOW RISK: 10)
         boundary_changes = []
-        if 'Gt' in old_compare and 'GtE' in new_compare and 'Gt' not in new_compare:
-            boundary_changes.append('> changed to >=')
-            risk = max(risk, 20)
-        if 'GtE' in old_compare and 'Gt' in new_compare and 'GtE' not in new_compare:
-            boundary_changes.append('>= changed to >')
-            risk = max(risk, 20)
-        if 'Lt' in old_compare and 'LtE' in new_compare and 'Lt' not in new_compare:
-            boundary_changes.append('< changed to <=')
-            risk = max(risk, 20)
-        if 'LtE' in old_compare and 'Lt' in new_compare and 'LtE' not in new_compare:
-            boundary_changes.append('<= changed to <')
-            risk = max(risk, 20)
+        if ('Gt' in old_compare and 'GtE' in new_compare) or ('GtE' in old_compare and 'Gt' in new_compare):
+            boundary_changes.append('> ↔ >=')
+            risk = max(risk, 10)
+        if ('Lt' in old_compare and 'LtE' in new_compare) or ('LtE' in old_compare and 'Lt' in new_compare):
+            boundary_changes.append('< ↔ <=')
+            risk = max(risk, 10)
         
         if boundary_changes:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"Boundary operator change detected: {', '.join(boundary_changes)} — low behavioral impact"],
-                risk=20,
+                findings=[f"Boundary operator adjustment: {', '.join(boundary_changes)} — minimal behavioral impact, likely edge-case refinement"],
+                risk=10,
                 details={'change_type': 'boundary_adjustment', 'changes': boundary_changes}
             ))
             details['boundary_changes'] = boundary_changes
@@ -341,61 +363,59 @@ class ChangeAnalyzer:
         # EQUALITY OPERATOR CHANGES (HIGH RISK: 80)
         equality_changes = []
         if 'Eq' in old_compare and 'NotEq' in new_compare:
-            equality_changes.append('== changed to !=')
+            equality_changes.append('== → !=')
             risk = max(risk, 80)
         if 'NotEq' in old_compare and 'Eq' in new_compare:
-            equality_changes.append('!= changed to ==')
+            equality_changes.append('!= → ==')
             risk = max(risk, 80)
         
         if equality_changes:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"High-risk equality operator inversion: {', '.join(equality_changes)} — reverses condition logic"],
+                findings=[f"Equality operator inversion: {', '.join(equality_changes)} — completely reverses condition logic"],
                 risk=80,
                 details={'change_type': 'equality_inversion', 'changes': equality_changes}
             ))
             details['equality_changes'] = equality_changes
         
-        # LOGICAL OPERATOR CHANGES (VERY HIGH RISK: 100)
+        # LOGICAL OPERATOR CHANGES (CRITICAL RISK: 95)
         logical_changes = []
         if 'And' in old_bool and 'Or' in new_bool:
-            logical_changes.append('AND changed to OR')
-            risk = max(risk, 100)
+            logical_changes.append('AND → OR')
+            risk = max(risk, 95)
         if 'Or' in old_bool and 'And' in new_bool:
-            logical_changes.append('OR changed to AND')
-            risk = max(risk, 100)
+            logical_changes.append('OR → AND')
+            risk = max(risk, 95)
         
         if logical_changes:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"Critical logical operator change: {', '.join(logical_changes)} — drastically alters control flow"],
-                risk=100,
+                findings=[f"Critical logical operator change: {', '.join(logical_changes)} — fundamentally alters control flow and execution paths"],
+                risk=95,
                 details={'change_type': 'logical_inversion', 'changes': logical_changes}
             ))
             details['logical_changes'] = logical_changes
         
-        # OTHER COMPARISON OPERATORS (MEDIUM-HIGH RISK: 60)
-        other_compare_changes = []
+        # OTHER COMPARISON OPERATORS (MEDIUM RISK: 45)
         if set(old_compare) != set(new_compare) and not boundary_changes and not equality_changes:
             old_set = set(old_compare)
             new_set = set(new_compare)
             removed = old_set - new_set
             added = new_set - old_set
             if removed or added:
-                other_compare_changes.append(f"removed: {removed}, added: {added}")
-                risk = max(risk, 60)
+                risk = max(risk, 45)
                 findings.append(AnalyzerResult(
                     name="ConditionShift",
-                    findings=[f"Comparison operator change detected — potential behavioral shift"],
-                    risk=60,
-                    details={'change_type': 'operator_change', 'removed': list(removed), 'added': list(added)}
+                    findings=["Comparison operator modified — logic potentially altered"],
+                    risk=45,
+                    details={'change_type': 'operator_modification', 'removed': list(removed), 'added': list(added)}
                 ))
-                details['other_operator_changes'] = {'removed': list(removed), 'added': list(added)}
+                details['operator_changes'] = {'removed': list(removed), 'added': list(added)}
         
         return risk, findings, details
 
-    def _analyze_functions(self, old_ast, new_ast, old_nodes, new_nodes):
-        """Analyze function changes"""
+    def _analyze_functions(self, old_nodes, new_nodes):
+        """Analyze function changes with FAIR risk scoring"""
         findings = []
         risk = 0
         details = {}
@@ -403,41 +423,67 @@ class ChangeAnalyzer:
         old_funcs = {f['name']: f for f in old_nodes['functions']}
         new_funcs = {f['name']: f for f in new_nodes['functions']}
         
-        # Functions added or removed
-        added_funcs = set(new_funcs.keys()) - set(old_funcs.keys())
-        removed_funcs = set(old_funcs.keys()) - set(new_funcs.keys())
+        old_calls = set(old_nodes['calls'])
+        new_calls = set(new_nodes['calls'])
         
-        if added_funcs:
-            findings.append(AnalyzerResult(
-                name="ConditionShift",
-                findings=[f"New functions added: {', '.join(added_funcs)} — introduces new behavior"],
-                risk=60,
-                details={'change_type': 'function_added', 'functions': list(added_funcs)}
-            ))
-            details['functions_added'] = list(added_funcs)
-            risk = max(risk, 60)
+        # Function name changes (MEDIUM RISK: 35) - e.g., is_weekday → is_business_day
+        old_names = set(old_funcs.keys())
+        new_names = set(new_funcs.keys())
         
-        if removed_funcs:
-            findings.append(AnalyzerResult(
-                name="ConditionShift",
-                findings=[f"Functions removed: {', '.join(removed_funcs)} — removes existing behavior"],
-                risk=80,
-                details={'change_type': 'function_removed', 'functions': list(removed_funcs)}
-            ))
-            details['functions_removed'] = list(removed_funcs)
-            risk = max(risk, 80)
+        # Check if it's a pure rename (same count, different names)
+        if len(old_funcs) == len(new_funcs) and old_names != new_names:
+            added_funcs = new_names - old_names
+            removed_funcs = old_names - new_names
+            
+            # If same number added and removed, likely a rename
+            if len(added_funcs) == len(removed_funcs) == 1:
+                findings.append(AnalyzerResult(
+                    name="ConditionShift",
+                    findings=[f"Function renamed: {list(removed_funcs)[0]} → {list(added_funcs)[0]} — semantic refactoring, review call sites"],
+                    risk=35,
+                    details={
+                        'change_type': 'function_rename',
+                        'old_name': list(removed_funcs)[0],
+                        'new_name': list(added_funcs)[0]
+                    }
+                ))
+                details['function_rename'] = {'old': list(removed_funcs)[0], 'new': list(added_funcs)[0]}
+                risk = max(risk, 35)
+        else:
+            # Functions added (MEDIUM RISK: 30)
+            added_funcs = new_names - old_names
+            if added_funcs and not (new_names - old_names == old_names - new_names):
+                findings.append(AnalyzerResult(
+                    name="ConditionShift",
+                    findings=[f"New functions added: {', '.join(list(added_funcs)[:3])}{'...' if len(added_funcs) > 3 else ''} — extends functionality"],
+                    risk=30,
+                    details={'change_type': 'functions_added', 'functions': list(added_funcs)}
+                ))
+                details['functions_added'] = list(added_funcs)
+                risk = max(risk, 30)
+            
+            # Functions removed (HIGH RISK: 70)
+            removed_funcs = old_names - new_names
+            if removed_funcs and not (new_names - old_names == old_names - new_names):
+                findings.append(AnalyzerResult(
+                    name="ConditionShift",
+                    findings=[f"Functions removed: {', '.join(list(removed_funcs)[:3])}{'...' if len(removed_funcs) > 3 else ''} — removes functionality"],
+                    risk=70,
+                    details={'change_type': 'functions_removed', 'functions': list(removed_funcs)}
+                ))
+                details['functions_removed'] = list(removed_funcs)
+                risk = max(risk, 70)
         
-        # Functions with signature changes
-        for func_name in set(old_funcs.keys()).intersection(set(new_funcs.keys())):
+        # Function signature changes (HIGH RISK: 65)
+        for func_name in old_names.intersection(new_names):
             old_func = old_funcs[func_name]
             new_func = new_funcs[func_name]
             
-            # Check argument changes (HIGH RISK: 80)
-            if old_func['args'] != new_func['args']:
+            if old_func['args'] != new_func['args'] or old_func['defaults'] != new_func['defaults']:
                 findings.append(AnalyzerResult(
                     name="ConditionShift",
-                    findings=[f"Function '{func_name}' signature changed: parameters modified — high risk of breaking calls"],
-                    risk=80,
+                    findings=[f"Function '{func_name}' signature changed — may break callers"],
+                    risk=65,
                     details={
                         'change_type': 'function_signature_change',
                         'function': func_name,
@@ -445,57 +491,45 @@ class ChangeAnalyzer:
                         'new_args': new_func['args']
                     }
                 ))
-                details[f'function_{func_name}_signature'] = {
-                    'old': old_func['args'],
-                    'new': new_func['args']
-                }
-                risk = max(risk, 80)
+                details[f'sig_change_{func_name}'] = True
+                risk = max(risk, 65)
             
-            # Check return type changes (HIGH RISK: 80)
             if old_func['returns'] != new_func['returns']:
                 findings.append(AnalyzerResult(
                     name="ConditionShift",
-                    findings=[f"Function '{func_name}' return type changed — may break dependent code"],
-                    risk=80,
+                    findings=[f"Function '{func_name}' return type changed — downstream impact possible"],
+                    risk=60,
                     details={
-                        'change_type': 'function_return_change',
+                        'change_type': 'return_type_change',
                         'function': func_name,
                         'old_return': old_func['returns'],
                         'new_return': new_func['returns']
                     }
                 ))
-                details[f'function_{func_name}_return'] = {
-                    'old': old_func['returns'],
-                    'new': new_func['returns']
-                }
-                risk = max(risk, 80)
+                details[f'return_change_{func_name}'] = True
+                risk = max(risk, 60)
         
-        # Function call changes (MEDIUM RISK: 40)
-        old_calls = set(old_nodes['calls'])
-        new_calls = set(new_nodes['calls'])
+        # Function call changes (MEDIUM RISK: 35)
         if old_calls != new_calls:
-            added_calls = new_calls - old_calls
-            removed_calls = old_calls - new_calls
-            if added_calls or removed_calls:
+            added = new_calls - old_calls
+            removed = old_calls - new_calls
+            if added or removed:
                 findings.append(AnalyzerResult(
                     name="ConditionShift",
-                    findings=[f"Function calls changed — execution flow modified"],
-                    risk=40,
+                    findings=["Function call patterns changed — execution flow modified"],
+                    risk=35,
                     details={
-                        'change_type': 'function_calls_change',
-                        'added_calls': list(added_calls),
-                        'removed_calls': list(removed_calls)
+                        'change_type': 'call_pattern_change',
+                        'added_calls': list(added)[:5],
+                        'removed_calls': list(removed)[:5]
                     }
                 ))
-                details['call_changes'] = {
-                    'added': list(added_calls),
-                    'removed': list(removed_calls)
-                }
-                risk = max(risk, 40)
+                details['call_changes'] = {'added': list(added), 'removed': list(removed)}
+                risk = max(risk, 35)
         
         return risk, findings, details
 
-    def _analyze_loops(self, old_ast, new_ast, old_nodes, new_nodes):
+    def _analyze_loops(self, old_nodes, new_nodes):
         """Analyze loop changes"""
         findings = []
         risk = 0
@@ -504,140 +538,129 @@ class ChangeAnalyzer:
         old_loops = old_nodes['loops']
         new_loops = new_nodes['loops']
         
-        # Loop type changes (HIGH RISK: 80)
-        old_loop_types = [loop['type'] for loop in old_loops]
-        new_loop_types = [loop['type'] for loop in new_loops]
+        old_types = [loop['type'] for loop in old_loops]
+        new_types = [loop['type'] for loop in new_loops]
         
+        old_breaks = old_nodes.get('breaks', 0)
+        new_breaks = new_nodes.get('breaks', 0)
+        old_continues = old_nodes.get('continues', 0)
+        new_continues = new_nodes.get('continues', 0)
+        
+        # Loop count change (MEDIUM RISK: 40)
         if len(old_loops) != len(new_loops):
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"Loop count changed from {len(old_loops)} to {len(new_loops)} — control flow altered"],
-                risk=60,
+                findings=[f"Loop count changed: {len(old_loops)} → {len(new_loops)} — iteration structure modified"],
+                risk=40,
                 details={
                     'change_type': 'loop_count_change',
                     'old_count': len(old_loops),
                     'new_count': len(new_loops)
                 }
             ))
-            details['loop_count_change'] = {'old': len(old_loops), 'new': len(new_loops)}
-            risk = max(risk, 60)
+            details['loop_count_change'] = True
+            risk = max(risk, 40)
         
-        # Check for For <-> While conversion
-        if 'For' in old_loop_types and 'While' in new_loop_types and 'For' not in new_loop_types:
+        # For ↔ While conversion (HIGH RISK: 70)
+        if 'For' in old_types and 'While' in new_types and 'For' not in new_types:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=["Loop type changed from FOR to WHILE — iteration logic fundamentally altered"],
-                risk=80,
+                findings=["Loop type changed: FOR → WHILE — iteration logic fundamentally altered"],
+                risk=70,
                 details={'change_type': 'loop_type_for_to_while'}
             ))
             details['loop_type_change'] = 'for_to_while'
-            risk = max(risk, 80)
+            risk = max(risk, 70)
         
-        if 'While' in old_loop_types and 'For' in new_loop_types and 'While' not in new_loop_types:
+        if 'While' in old_types and 'For' in new_types and 'While' not in new_types:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=["Loop type changed from WHILE to FOR — iteration logic fundamentally altered"],
-                risk=80,
+                findings=["Loop type changed: WHILE → FOR — iteration logic fundamentally altered"],
+                risk=70,
                 details={'change_type': 'loop_type_while_to_for'}
             ))
             details['loop_type_change'] = 'while_to_for'
-            risk = max(risk, 80)
+            risk = max(risk, 70)
         
-        # Check loop boundary/condition changes (MEDIUM RISK: 60)
+        # Loop boundary/condition changes (MEDIUM RISK: 45)
         for i, (old_loop, new_loop) in enumerate(zip(old_loops, new_loops)):
             if old_loop['type'] == new_loop['type']:
-                if old_loop['type'] == 'For':
-                    if old_loop['iter'] != new_loop['iter']:
-                        findings.append(AnalyzerResult(
-                            name="ConditionShift",
-                            findings=[f"FOR loop iteration range changed — boundary conditions modified"],
-                            risk=60,
-                            details={
-                                'change_type': 'loop_boundary_change',
-                                'old_iter': old_loop['iter'],
-                                'new_iter': new_loop['iter']
-                            }
-                        ))
-                        details[f'loop_{i}_boundary'] = {
-                            'old': old_loop['iter'],
-                            'new': new_loop['iter']
-                        }
-                        risk = max(risk, 60)
-                elif old_loop['type'] == 'While':
-                    if old_loop['test'] != new_loop['test']:
-                        findings.append(AnalyzerResult(
-                            name="ConditionShift",
-                            findings=[f"WHILE loop condition changed — termination logic altered"],
-                            risk=60,
-                            details={
-                                'change_type': 'loop_condition_change',
-                                'old_test': old_loop['test'],
-                                'new_test': new_loop['test']
-                            }
-                        ))
-                        details[f'loop_{i}_condition'] = {
-                            'old': old_loop['test'],
-                            'new': new_loop['test']
-                        }
-                        risk = max(risk, 60)
+                if old_loop['type'] == 'For' and old_loop.get('iter') != new_loop.get('iter'):
+                    findings.append(AnalyzerResult(
+                        name="ConditionShift",
+                        findings=["FOR loop range modified — iteration bounds changed"],
+                        risk=45,
+                        details={'change_type': 'loop_boundary_change', 'loop_index': i}
+                    ))
+                    details[f'loop_{i}_boundary'] = True
+                    risk = max(risk, 45)
+                
+                if old_loop['type'] == 'While' and old_loop.get('test') != new_loop.get('test'):
+                    findings.append(AnalyzerResult(
+                        name="ConditionShift",
+                        findings=["WHILE loop condition modified — termination logic changed"],
+                        risk=50,
+                        details={'change_type': 'loop_condition_change', 'loop_index': i}
+                    ))
+                    details[f'loop_{i}_condition'] = True
+                    risk = max(risk, 50)
+        
+        # Break/Continue changes (MEDIUM RISK: 40)
+        if old_breaks != new_breaks or old_continues != new_continues:
+            findings.append(AnalyzerResult(
+                name="ConditionShift",
+                findings=[f"Loop control statements changed: break({old_breaks}→{new_breaks}), continue({old_continues}→{new_continues}) — early exit logic modified"],
+                risk=40,
+                details={
+                    'change_type': 'loop_control_change',
+                    'old_breaks': old_breaks,
+                    'new_breaks': new_breaks,
+                    'old_continues': old_continues,
+                    'new_continues': new_continues
+                }
+            ))
+            details['loop_control_change'] = True
+            risk = max(risk, 40)
         
         return risk, findings, details
 
-    def _analyze_imports(self, old_ast, new_ast):
+    def _analyze_imports(self, old_nodes, new_nodes):
         """Analyze library/import changes"""
         findings = []
         risk = 0
         details = {}
         
-        old_imports = set()
-        new_imports = set()
+        old_imports = set(old_nodes['imports'])
+        new_imports = set(new_nodes['imports'])
         
-        for node in ast.walk(old_ast):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    old_imports.add(alias.name)
-            elif isinstance(node, ast.ImportFrom):
-                old_imports.add(node.module if node.module else 'relative')
+        added = new_imports - old_imports
+        removed = old_imports - new_imports
         
-        for node in ast.walk(new_ast):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    new_imports.add(alias.name)
-            elif isinstance(node, ast.ImportFrom):
-                new_imports.add(node.module if node.module else 'relative')
-        
-        added_imports = new_imports - old_imports
-        removed_imports = old_imports - new_imports
-        
-        if added_imports:
+        # New imports (LOW-MEDIUM RISK: 25)
+        if added:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"New libraries imported: {', '.join(added_imports)} — introduces external dependencies"],
-                risk=40,
-                details={
-                    'change_type': 'imports_added',
-                    'libraries': list(added_imports)
-                }
+                findings=[f"New dependencies added: {', '.join(list(added)[:3])}{'...' if len(added) > 3 else ''} — external dependencies introduced"],
+                risk=25,
+                details={'change_type': 'imports_added', 'libraries': list(added)}
             ))
-            details['imports_added'] = list(added_imports)
-            risk = max(risk, 40)
+            details['imports_added'] = list(added)
+            risk = max(risk, 25)
         
-        if removed_imports:
+        # Removed imports (MEDIUM-HIGH RISK: 55)
+        if removed:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"Libraries removed: {', '.join(removed_imports)} — may break dependent functionality"],
-                risk=60,
-                details={
-                    'change_type': 'imports_removed',
-                    'libraries': list(removed_imports)
-                }
+                findings=[f"Dependencies removed: {', '.join(list(removed)[:3])}{'...' if len(removed) > 3 else ''} — may break dependent functionality"],
+                risk=55,
+                details={'change_type': 'imports_removed', 'libraries': list(removed)}
             ))
-            details['imports_removed'] = list(removed_imports)
-            risk = max(risk, 60)
+            details['imports_removed'] = list(removed)
+            risk = max(risk, 55)
         
         return risk, findings, details
 
-    def _analyze_datatypes(self, old_ast, new_ast, old_nodes, new_nodes):
+    def _analyze_datatypes(self, old_nodes, new_nodes):
         """Analyze data type changes"""
         findings = []
         risk = 0
@@ -646,140 +669,167 @@ class ChangeAnalyzer:
         old_constants = old_nodes['constants']
         new_constants = new_nodes['constants']
         
-        # Extract constant types
         old_types = [c['type'] for c in old_constants]
         new_types = [c['type'] for c in new_constants]
         
         old_type_set = set(old_types)
         new_type_set = set(new_types)
         
-        # Check for type changes (MEDIUM-HIGH RISK: 60)
+        # Type changes (MEDIUM RISK: 50)
         type_changes = []
         if 'int' in old_type_set and 'float' in new_type_set:
             type_changes.append('int → float')
-            risk = max(risk, 60)
         if 'float' in old_type_set and 'int' in new_type_set:
             type_changes.append('float → int')
-            risk = max(risk, 60)
         if 'list' in old_type_set and 'tuple' in new_type_set:
             type_changes.append('list → tuple (mutable to immutable)')
-            risk = max(risk, 60)
         if 'list' in old_type_set and 'set' in new_type_set:
             type_changes.append('list → set (ordered to unordered)')
-            risk = max(risk, 60)
         if 'dict' in old_type_set and 'list' in new_type_set:
             type_changes.append('dict → list')
-            risk = max(risk, 60)
         
         if type_changes:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"Data type changes detected: {', '.join(type_changes)} — potential type errors"],
-                risk=60,
-                details={
-                    'change_type': 'datatype_change',
-                    'changes': type_changes
-                }
+                findings=[f"Data type changes detected: {', '.join(type_changes)} — potential type compatibility issues"],
+                risk=50,
+                details={'change_type': 'datatype_change', 'changes': type_changes}
             ))
             details['datatype_changes'] = type_changes
+            risk = max(risk, 50)
         
-        # Check return type changes (analyzed in function analysis but also check here)
-        old_returns = [r for r in old_nodes['returns'] if r]
-        new_returns = [r for r in new_nodes['returns'] if r]
+        # Return value changes (MEDIUM-HIGH RISK: 55)
+        old_returns = [r for r in old_nodes['returns'] if r and r != "None"]
+        new_returns = [r for r in new_nodes['returns'] if r and r != "None"]
         
-        if len(old_returns) != len(new_returns) or (old_returns and new_returns and old_returns != new_returns):
+        if set(old_returns) != set(new_returns):
             findings.append(AnalyzerResult(
                 name="ConditionShift",
                 findings=["Return values changed — output type or structure modified"],
-                risk=80,
+                risk=55,
                 details={
-                    'change_type': 'return_type_change',
-                    'old_returns': old_returns,
-                    'new_returns': new_returns
+                    'change_type': 'return_value_change',
+                    'old_returns': old_returns[:3],
+                    'new_returns': new_returns[:3]
                 }
             ))
-            details['return_changes'] = {
-                'old': old_returns,
-                'new': new_returns
-            }
-            risk = max(risk, 80)
+            details['return_changes'] = True
+            risk = max(risk, 55)
         
         return risk, findings, details
 
-    def _analyze_structural(self, old_ast, new_ast, old_nodes, new_nodes):
-        """Analyze structural AST changes"""
+    def _analyze_control_flow(self, old_nodes, new_nodes):
+        """Analyze control flow changes"""
         findings = []
         risk = 0
         details = {}
         
-        # Count different node types
-        old_node_counts = self._count_node_types(old_ast)
-        new_node_counts = self._count_node_types(new_ast)
+        old_ifs = len(old_nodes['if_nodes'])
+        new_ifs = len(new_nodes['if_nodes'])
+        old_trys = len(old_nodes['try_nodes'])
+        new_trys = len(new_nodes['try_nodes'])
         
-        # Detect major structural changes
-        structural_changes = []
-        
-        # Control flow changes
-        if old_node_counts.get('If', 0) != new_node_counts.get('If', 0):
-            structural_changes.append(f"If statements: {old_node_counts.get('If', 0)} → {new_node_counts.get('If', 0)}")
-            risk = max(risk, 60)
-        
-        if old_node_counts.get('Try', 0) != new_node_counts.get('Try', 0):
-            structural_changes.append(f"Try-except blocks: {old_node_counts.get('Try', 0)} → {new_node_counts.get('Try', 0)}")
-            risk = max(risk, 40)
-        
-        # Assignment changes
-        if old_node_counts.get('Assign', 0) != new_node_counts.get('Assign', 0):
-            structural_changes.append(f"Assignments: {old_node_counts.get('Assign', 0)} → {new_node_counts.get('Assign', 0)}")
-            risk = max(risk, 40)
-        
-        if structural_changes:
+        # If statement changes (MEDIUM RISK: 40)
+        if old_ifs != new_ifs:
             findings.append(AnalyzerResult(
                 name="ConditionShift",
-                findings=[f"Structural changes detected: {'; '.join(structural_changes)} — control flow modified"],
-                risk=risk if risk > 0 else 60,
-                details={
-                    'change_type': 'structural_change',
-                    'changes': structural_changes,
-                    'old_structure': old_node_counts,
-                    'new_structure': new_node_counts
-                }
-            ))
-            details['structural_changes'] = {
-                'changes': structural_changes,
-                'old': old_node_counts,
-                'new': new_node_counts
-            }
-        
-        # If no specific changes found but AST is different, it's a minor refactor
-        if not structural_changes and ast.dump(old_ast) != ast.dump(new_ast):
-            findings.append(AnalyzerResult(
-                name="ConditionShift",
-                findings=["Minor code refactoring detected — cosmetic or minor structural changes"],
+                findings=[f"Conditional branches changed: {old_ifs} → {new_ifs} if statements — decision paths modified"],
                 risk=40,
-                details={'change_type': 'minor_refactor'}
+                details={'change_type': 'if_count_change', 'old': old_ifs, 'new': new_ifs}
             ))
-            details['change_type'] = 'minor_refactor'
+            details['if_change'] = True
             risk = max(risk, 40)
+        
+        # Try-except changes (MEDIUM RISK: 35)
+        if old_trys != new_trys:
+            findings.append(AnalyzerResult(
+                name="ConditionShift",
+                findings=[f"Exception handling changed: {old_trys} → {new_trys} try blocks — error handling modified"],
+                risk=35,
+                details={'change_type': 'try_count_change', 'old': old_trys, 'new': new_trys}
+            ))
+            details['try_change'] = True
+            risk = max(risk, 35)
         
         return risk, findings, details
 
-    def _count_node_types(self, tree):
-        """Count different AST node types"""
-        counts = {}
-        for node in ast.walk(tree):
-            node_type = type(node).__name__
-            counts[node_type] = counts.get(node_type, 0) + 1
-        return counts
+    def _analyze_structural(self, old_ast, new_ast, old_nodes, new_nodes):
+        """Analyze structural AST changes (cosmetic/refactoring)"""
+        findings = []
+        risk = 0
+        details = {}
+        
+        # Check variable name changes (VERY LOW RISK: 5)
+        old_names = set(old_nodes['names'])
+        new_names = set(new_nodes['names'])
+        
+        if old_names != new_names:
+            added_names = new_names - old_names
+            removed_names = old_names - new_names
+            
+            # If it's mostly renaming (similar counts), low risk
+            if abs(len(old_names) - len(new_names)) <= 2:
+                findings.append(AnalyzerResult(
+                    name="ConditionShift",
+                    findings=["Variable names changed — likely cosmetic refactoring"],
+                    risk=5,
+                    details={
+                        'change_type': 'variable_rename',
+                        'added': list(added_names)[:5],
+                        'removed': list(removed_names)[:5]
+                    }
+                ))
+                details['variable_rename'] = True
+                risk = max(risk, 5)
+            else:
+                # Significant variable changes (MEDIUM RISK: 40)
+                findings.append(AnalyzerResult(
+                    name="ConditionShift",
+                    findings=["Significant variable structure changes detected"],
+                    risk=40,
+                    details={
+                        'change_type': 'variable_structure_change',
+                        'old_count': len(old_names),
+                        'new_count': len(new_names)
+                    }
+                ))
+                details['variable_structure_change'] = True
+                risk = max(risk, 40)
+        
+        # Assignment changes (LOW-MEDIUM RISK: 30)
+        old_assigns = set(old_nodes['assignments'])
+        new_assigns = set(new_nodes['assignments'])
+        
+        if old_assigns != new_assigns and not details.get('variable_rename'):
+            findings.append(AnalyzerResult(
+                name="ConditionShift",
+                findings=["Assignment patterns changed — data flow modified"],
+                risk=30,
+                details={'change_type': 'assignment_change'}
+            ))
+            details['assignment_change'] = True
+            risk = max(risk, 30)
+        
+        # If still no risk detected but AST changed (VERY LOW RISK: 5)
+        if risk == 0 and ast.dump(old_ast) != ast.dump(new_ast):
+            findings.append(AnalyzerResult(
+                name="ConditionShift",
+                findings=["Minor structural changes detected — likely formatting or cosmetic"],
+                risk=5,
+                details={'change_type': 'cosmetic_change'}
+            ))
+            details['cosmetic_change'] = True
+            risk = 5
+        
+        return risk, findings, details
 
 
-# COMPLIANCE ANALYZER 
+# COMPLIANCE ANALYZER (IMPROVED)
 
 class ComplianceAnalyzer:
     """
     Validates code against expected behavior contract.
-    Uses AST identifier extraction, not AI guessing.
-    AI is used only for explanation, not decision.
+    Uses AST structural analysis, not text matching.
     """
     
     def analyze(self, code: str, expected: str):
@@ -807,41 +857,76 @@ class ComplianceAnalyzer:
                 "comparison_method": "no_contract_specified"
             }
 
-        # Extract identifiers from code (REAL ANALYSIS)
+        # Extract structural elements from code
         identifiers = extract_identifiers(tree)
         
-        # Tokenize expected behavior
-        expected_words = set(expected.lower().split())
+        # Extract function names
+        function_names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                function_names.add(node.name)
         
-        # Check if expected tokens appear in code identifiers
-        # This is a structural match, not text comparison
-        matches = bool(identifiers.intersection(expected_words))
-
-        # Determine risk
-        risk = 60 if not matches else 0
+        # Extract constants/literals
+        constants = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant):
+                constants.add(str(node.value).lower())
+        
+        # Tokenize expected behavior (normalize)
+        expected_lower = expected.lower()
+        expected_words = set(expected_lower.split())
+        
+        # Multi-level matching
+        identifier_match = bool(identifiers.intersection(expected_words))
+        function_match = bool(function_names.intersection(expected_words))
+        constant_match = bool(constants.intersection(expected_words))
+        
+        # Calculate semantic similarity score
+        all_code_tokens = identifiers.union(function_names).union(constants)
+        intersection = all_code_tokens.intersection(expected_words)
+        
+        if all_code_tokens:
+            similarity = len(intersection) / max(len(expected_words), 1)
+        else:
+            similarity = 0.0
+        
+        # Determine risk based on similarity
+        if similarity >= 0.5:
+            risk = 0  # High match
+        elif similarity >= 0.3:
+            risk = 30  # Partial match
+        elif similarity >= 0.1:
+            risk = 50  # Low match
+        else:
+            risk = 70  # No match
 
         findings = []
-        if not matches:
+        if risk > 0:
             findings.append(
                 AnalyzerResult(
                     name="ContractViolation",
-                    findings=["Expected behavior not aligned with code semantics"],
-                    risk=60,
+                    findings=[f"Expected behavior alignment: {similarity*100:.1f}% — code may not fully implement specification"],
+                    risk=risk,
                     details={
-                        "identifiers_found": sorted(list(identifiers)),
-                        "expected_tokens": sorted(list(expected_words)),
-                        "intersection": sorted(list(identifiers.intersection(expected_words)))
+                        "identifiers_found": sorted(list(identifiers))[:10],
+                        "function_names": sorted(list(function_names)),
+                        "expected_tokens": sorted(list(expected_words))[:10],
+                        "matched_tokens": sorted(list(intersection)),
+                        "similarity_score": round(similarity, 3)
                     }
                 )
             )
 
         return findings, risk, {
-            "semantic_similarity": 1.0 if matches else 0.2,
-            "invariant_broken": not matches,
+            "semantic_similarity": similarity,
+            "invariant_broken": risk > 50,
             "source_hash": src_hash,
-            "comparison_method": "ast_identifier_match",
-            "identifiers_in_code": sorted(list(identifiers)),
-            "expected_tokens": sorted(list(expected_words))
+            "comparison_method": "ast_structural_match",
+            "identifiers_in_code": sorted(list(identifiers))[:15],
+            "functions_in_code": sorted(list(function_names)),
+            "expected_tokens": sorted(list(expected_words))[:15],
+            "matched_tokens": sorted(list(intersection)),
+            "similarity_percentage": round(similarity * 100, 2)
         }
 
 
@@ -1002,126 +1087,144 @@ Keep response under 100 words."""
 
 def comprehensive_analysis_prompt(old_code: str, new_code: str) -> str:
     """
-    Comprehensive line-by-line analysis prompt for CHANGE mode.
+    FIXED: Comprehensive line-by-line analysis prompt for CHANGE mode.
     Used when user wants detailed change analysis.
     """
-    return f"""You are an expert Python static analysis engine.  
-Your job is to perform a COMPLETE, line-by-line, structural, semantic, and behavioral comparison between two Python code versions.
+    return f"""You are an expert Python static analysis engine performing comprehensive code comparison.
 
-You must analyze and report EVERY change — no matter how small.
+**TASK:** Analyze EVERY difference between OLD and NEW code versions.
 
-INPUT
-
-OLD CODE:
+═══════════════════════════════════════════════════
+📄 OLD CODE:
+═══════════════════════════════════════════════════
 {old_code}
 
-NEW CODE:
+═══════════════════════════════════════════════════
+📄 NEW CODE:
+═══════════════════════════════════════════════════
 {new_code}
 
-YOUR TASK (MANDATORY)
+═══════════════════════════════════════════════════
+🔍 ANALYSIS REQUIREMENTS (MANDATORY):
+═══════════════════════════════════════════════════
 
-Compare OLD vs NEW code at these levels:
+Analyze at these levels:
 
-1) SYNTAX-LEVEL CHANGES  
-- Keywords (if, for, while, try, except, return)
-- Indentation or block structure
-- Decorators, annotations, type hints
-- Comments affecting meaning
-- Formatting affecting execution
+**1. SYNTAX CHANGES**
+- Keywords (if/for/while/try/except/return/def/class)
+- Indentation/block structure
+- Decorators, type hints
+- Comments with semantic meaning
 
-2) OPERATOR-LEVEL CHANGES  
-- Comparison operators (>, >=, <, <=, ==, !=)
-- Logical operators (and/or/not)
-- Arithmetic operators (+, -, *, /, //, %, **)
-- Bitwise operators (&, |, ^, <<, >>)
-- Assignment operators (=, +=, -=)
+**2. OPERATOR CHANGES**
+- Comparison: >, >=, <, <=, ==, !=
+- Logical: and, or, not
+- Arithmetic: +, -, *, /, //, %, **
+- Bitwise: &, |, ^, <<, >>
+→ For EACH: Old → New → Impact
 
-For each: Old operator → New operator → Impact
-
-3) CONTROL FLOW CHANGES  
+**3. CONTROL FLOW**
 - if/elif/else conditions
-- Loop types (for → while)
-- Loop bounds/iteration logic
-- Break/continue/return behavior
-- Exception handling (try/except/finally)
-- Function call order
+- Loop types (for vs while)
+- Loop bounds/ranges
+- break/continue/return placement
+- try/except/finally blocks
+- Early exits
 
-4) FUNCTION & CLASS CHANGES  
-- New/removed functions
-- Signature changes (parameters, defaults, types)
-- Behavior changes inside functions
-- New/removed classes
-- Method changes
-- Constructor (__init__) changes
-- Inheritance changes
-
-5) LIBRARY & IMPORT CHANGES  
-- New/removed imports
-- Version-specific libraries
-- External dependencies
-
-6) DATA TYPE CHANGES  
-- Variable type changes (int → float, list → dict)
-- Structure changes (list → tuple)
-- Mutable vs immutable
+**4. FUNCTIONS & CLASSES**
+- New/removed/renamed functions
+- Parameter changes (count, names, defaults, types)
 - Return type changes
+- Method additions/removals
+- Class hierarchy changes
 
-7) VARIABLE & STATE CHANGES  
-- New/removed variables
-- Scope changes (local → global)
+**5. LIBRARIES & IMPORTS**
+- New imports
+- Removed imports
+- Changed module names
+
+**6. DATA TYPES**
+- Variable type changes (int→float, list→dict, etc.)
+- Collection changes (list→set→tuple)
+- Mutability changes
+- Return type modifications
+
+**7. VARIABLES & STATE**
+- New variables
+- Removed variables
+- Renamed variables
+- Scope changes (local→global)
 - Default value changes
-- Side effects introduced
 
-8) AST STRUCTURAL CHANGES  
-- AST structure changed?
-- Which nodes changed?
-- Semantic or cosmetic?
+**8. AST STRUCTURE**
+- Node type changes
+- Tree depth changes
+- Semantic vs cosmetic
 
-9) RISK ASSESSMENT  
-For every change:
-- LOW: Cosmetic/safe refactor
-- MEDIUM: Possible behavior change
-- HIGH: Likely breaking change
+**9. RISK ASSESSMENT**
+For EVERY change, classify:
+- **LOW (0-20):** Cosmetic, safe refactor, formatting
+- **MEDIUM (21-50):** Business logic tweak, boundary adjustment, naming
+- **HIGH (51-100):** Logic inversion, breaking changes, control flow shift
 
-=========================================
-OUTPUT FORMAT (STRICT)
-=========================================
+═══════════════════════════════════════════════════
+📋 OUTPUT FORMAT (STRICT):
+═══════════════════════════════════════════════════
 
-### 🔹 SUMMARY  
-Brief overview of total changes.
+### 🔹 SUMMARY
+Total changes: X
+Critical changes: Y
+Risk level: LOW/MEDIUM/HIGH
 
-### 🔹 DETAILED CHANGE LIST  
-For each change:
-- Location (line/function)
-- Old behavior
-- New behavior
-- Type of change
-- Risk level
-- Why this matters
+### 🔹 DETAILED CHANGES
 
-### 🔹 CONTROL FLOW IMPACT  
-How execution paths changed.
+**Change 1: [Category]**
+- **Location:** Line X / Function Y
+- **Old:** `code snippet`
+- **New:** `code snippet`
+- **Type:** [operator/function/loop/etc]
+- **Risk:** [LOW/MEDIUM/HIGH] - [score]
+- **Impact:** [what this means]
 
-### 🔹 DATA & STATE IMPACT  
-How data flow changed.
+[Repeat for ALL changes]
 
-### 🔹 LIBRARY IMPACT  
-Dependency risks.
+### 🔹 CONTROL FLOW IMPACT
+- Execution paths: [how they changed]
+- Decision logic: [modifications]
+- Error handling: [changes]
 
-### 🔹 FINAL RISK SCORE (0–100)  
-Overall score with justification.
+### 🔹 DATA & STATE IMPACT
+- Variable flow: [changes]
+- Type safety: [concerns]
+- Side effects: [introduced/removed]
 
-RULES
+### 🔹 DEPENDENCY IMPACT
+- New libraries: [list]
+- Removed libraries: [list]
+- API changes: [list]
 
-- Do NOT summarize loosely
-- Do NOT skip small changes
-- Treat every line as important
-- Be skeptical and critical
-- Prefer accuracy over brevity
-- Never assume intent — only analyze what you see
-- If unclear, say "UNCERTAIN"
+### 🔹 FINAL RISK SCORE
+**Overall Risk: XX/100**
 
-Analyze now."""
+Justification:
+- [Key reason 1]
+- [Key reason 2]
+- [Key reason 3]
+
+═══════════════════════════════════════════════════
+⚠️ CRITICAL RULES:
+═══════════════════════════════════════════════════
+✓ Report EVERY change, no matter how small
+✓ Be precise and specific
+✓ Use actual code snippets
+✓ Quantify risk numerically
+✓ Never assume intent
+✓ If uncertain about impact, say "UNCERTAIN"
+✗ Do NOT summarize vaguely
+✗ Do NOT skip "minor" changes
+✗ Do NOT editorialize
+
+**BEGIN ANALYSIS NOW.**"""
 
 def compliance_solution_prompt(hash_code: str, expected: str, risk: int) -> str:
     """
@@ -1173,14 +1276,21 @@ async def analyze(req: AnalyzeRequest):
             # Choose analysis depth
             if req.enable_deep_analysis:
                 # Comprehensive line-by-line analysis
-                comprehensive, provider = ai(comprehensive_analysis_prompt(req.old_condition, req.new_condition))
-                tech = comprehensive  # Deep analysis serves as technical explanation
+                try:
+                    comprehensive, provider = ai(comprehensive_analysis_prompt(req.old_condition, req.new_condition))
+                    tech = comprehensive  # Deep analysis serves as technical explanation
+                except Exception as e:
+                    print(f"Deep analysis failed: {e}")
+                    tech, provider = ai(technical_prompt(mode, signals, findings, risk, req.technical_depth))
             else:
                 # Standard technical explanation
                 tech, provider = ai(technical_prompt(mode, signals, findings, risk, req.technical_depth))
             
             # Always generate human explanation
-            human, _ = ai(human_prompt(findings, risk))
+            try:
+                human, _ = ai(human_prompt(findings, risk))
+            except Exception as e:
+                human = "Analysis completed. Please review technical findings."
 
             result = {
                 "mode": "CHANGE",
@@ -1208,14 +1318,13 @@ async def analyze(req: AnalyzeRequest):
             risk = normalize_risk(raw_risk)
 
             # AI explains (does not decide) - with configurable depth
-            tech, provider = ai(technical_prompt(mode, signals, findings, risk, req.technical_depth))
-            solution, _ = ai(
-                compliance_solution_prompt(
-                    signals["source_hash"],
-                    req.expected_output,
-                    risk
-                )
-            )
+            try:
+                tech, provider = ai(technical_prompt(mode, signals, findings, risk, req.technical_depth))
+                solution, _ = ai(compliance_solution_prompt(signals["source_hash"], req.expected_output, risk))
+            except Exception as e:
+                tech = "Analysis completed. Review findings below."
+                solution = "Verify code matches expected behavior specification."
+                provider = "None"
 
             result = {
                 "mode": "COMPLIANCE",
@@ -1315,30 +1424,32 @@ async def health():
     """API health check and information"""
     return {
         "status": "ok",
-        "service": "CRONOS API v4.0.0 - COMPREHENSIVE AST ANALYSIS",
+        "service": "CRONOS API v4.0.0 - COMPREHENSIVE & FAIR AST ANALYSIS",
         "cors": "ALLOW ALL (testing mode)",
         "improvements": [
-            "CHANGE mode: Comprehensive AST-based analysis",
-            "Explicit classification: operators, functions, loops, imports, datatypes, structure",
-            "Risk scoring: 0-20-40-60-80-100 normalized buckets",
+            "CHANGE mode: Comprehensive AST-based analysis with FAIR risk scoring",
+            "Explicit classification: operators, functions, loops, imports, datatypes, control flow",
+            "FAIR risk buckets: boundary(10), rename(35), logic change(45), inversion(80-95)",
             "AI: Explanation only (not decision-making)",
             "Role-locked prompts for distinct outputs",
-            "Three-level status: PASS/WARN/FAIL",
+            "Reasonable status: PASS(≤20), WARN(21-50), FAIL(51-100)",
             "Configurable technical depth: academic/balanced/simple",
-            "Deep analysis mode: Comprehensive line-by-line comparison"
+            "Deep analysis mode: Fixed comprehensive line-by-line comparison",
+            "Improved compliance: Multi-level structural matching"
         ],
         "analysis_categories": [
             "1. Operator changes (boundary/equality/logical)",
-            "2. Function changes (signature/calls/returns)",
-            "3. Loop changes (type/boundary/body)",
+            "2. Function changes (rename/signature/calls/returns)",
+            "3. Loop changes (type/boundary/body/break/continue)",
             "4. Library changes (imports/dependencies)",
             "5. Data type changes (int/float/list/dict/returns)",
-            "6. Structural changes (control flow/refactoring)"
+            "6. Control flow (if/try/branches)",
+            "7. Structural changes (variables/assignments/cosmetic)"
         ],
         "risk_levels": {
-            "0-29": "PASS - Safe changes",
-            "30-59": "WARN - Review recommended",
-            "60-100": "FAIL - High risk changes"
+            "0-20": "PASS - Safe changes (boundary tweaks, cosmetic)",
+            "21-50": "WARN - Review recommended (renames, business logic)",
+            "51-100": "FAIL - High risk (inversions, breaking changes)"
         },
         "technical_depth_options": {
             "academic": "Heavy terminology (CFG, DFA, invariants) - for SIH/research/professors",
@@ -1347,7 +1458,7 @@ async def health():
         },
         "analysis_modes": {
             "standard": "Fast analysis with smart risk scoring (enable_deep_analysis: false)",
-            "deep": "Comprehensive line-by-line comparison covering syntax, operators, control flow, functions, imports, data types, variables, AST, and detailed risk assessment (enable_deep_analysis: true)"
+            "deep": "Comprehensive line-by-line comparison (enable_deep_analysis: true)"
         },
         "features": {
             "gemini": gemini_client is not None,
@@ -1358,12 +1469,27 @@ async def health():
             "GET /report/json/{id}",
             "GET /report/pdf/{id}"
         ],
-        "example_request": {
-            "mode": "CHANGE",
-            "old_condition": "x > 10 and y == 5",
-            "new_condition": "x >= 10 or y != 5",
-            "technical_depth": "balanced",
-            "enable_deep_analysis": False
+        "example_requests": {
+            "boundary_change": {
+                "mode": "CHANGE",
+                "old_condition": "x > 10",
+                "new_condition": "x >= 10",
+                "technical_depth": "balanced",
+                "enable_deep_analysis": False,
+                "expected_result": "PASS (risk: 10)"
+            },
+            "function_rename": {
+                "mode": "CHANGE",
+                "old_condition": "def is_weekday(day):\n    return day in [1,2,3,4,5]",
+                "new_condition": "def is_business_day(day):\n    return day in [1,2,3,4,5]",
+                "expected_result": "WARN (risk: 35)"
+            },
+            "logical_inversion": {
+                "mode": "CHANGE",
+                "old_condition": "if x > 10 and y < 5:",
+                "new_condition": "if x > 10 or y < 5:",
+                "expected_result": "FAIL (risk: 95)"
+            }
         }
     }
 
@@ -1373,9 +1499,9 @@ async def health():
 @app.on_event("startup")
 async def startup_event():
     """Print startup information"""
-    print("=" * 60)
-    print("✅ CRONOS v4.0.0 - COMPREHENSIVE AST ANALYSIS")
-    print("=" * 60)
+    print("=" * 70)
+    print("✅ CRONOS v4.0.0 - COMPREHENSIVE & FAIR AST ANALYSIS")
+    print("=" * 70)
     print(f"📁 Report directory: {REPORT_DIR}")
     print(f"🤖 Gemini: {'✅ Enabled' if gemini_client else '❌ Disabled'}")
     print(f"🤖 OpenRouter: {'✅ Enabled' if OPENROUTER_ENABLED else '❌ Disabled'}")
@@ -1383,21 +1509,26 @@ async def startup_event():
     print()
     print("🔧 ANALYSIS CATEGORIES:")
     print("  1. Operator changes (boundary/equality/logical)")
-    print("  2. Function changes (signature/calls/returns)")
-    print("  3. Loop changes (type/boundary/body)")
+    print("  2. Function changes (rename/signature/calls/returns)")
+    print("  3. Loop changes (type/boundary/body/break/continue)")
     print("  4. Library changes (imports/dependencies)")
     print("  5. Data type changes (int/float/list/dict/returns)")
-    print("  6. Structural changes (control flow/refactoring)")
+    print("  6. Control flow (if/try/branches)")
+    print("  7. Structural changes (variables/assignments/cosmetic)")
     print()
-    print("📊 RISK LEVELS:")
-    print("  • 0-29:   PASS (Safe changes)")
-    print("  • 30-59:  WARN (Review recommended)")
-    print("  • 60-100: FAIL (High risk changes)")
+    print("📊 FAIR RISK LEVELS:")
+    print("  • 0-20:   PASS ✅ (boundary tweaks, cosmetic, safe refactor)")
+    print("  • 21-50:  WARN ⚠️  (renames, business logic, moderate changes)")
+    print("  • 51-100: FAIL ❌ (inversions, breaking changes, high impact)")
     print()
-    print("🎯 FEATURES:")
+    print("🎯 KEY FEATURES:")
     print("  ✓ AST-only analysis (no AI decision-making)")
+    print("  ✓ FAIR risk scoring (not overly harsh)")
+    print("  ✓ Function rename → WARN (not FAIL)")
+    print("  ✓ Boundary change → PASS (not WARN)")
+    print("  ✓ Logical inversion → FAIL (appropriate)")
     print("  ✓ Role-locked prompts for distinct outputs")
     print("  ✓ Technical depth: academic/balanced/simple")
-    print("  ✓ Deep analysis: Line-by-line comprehensive comparison")
-    print("=" * 60)
-```
+    print("  ✓ Deep analysis: FIXED comprehensive comparison")
+    print("  ✓ Improved compliance: Multi-level matching")
+    print("=" * 70)
