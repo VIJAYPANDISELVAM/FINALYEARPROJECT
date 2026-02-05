@@ -104,7 +104,7 @@ class AnalyzeRequest(BaseModel):
     
     # Configuration
     constraints: Constraint = Field(default_factory=Constraint)
-    technical_depth: str = Field(default="balanced", regex="^(academic|balanced|simple)$")
+    technical_depth: str = Field(default="balanced", pattern="^(academic|balanced|simple)$")
     enable_deep_analysis: bool = Field(default=False)
     
     @validator('mode')
@@ -2084,3 +2084,8 @@ async def startup_event():
     print()
     print("🎓 READY FOR VIVA DEFENSE - 5/5 GRADE TARGET")
     print("=" * 80)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
