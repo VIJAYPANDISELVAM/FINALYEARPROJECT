@@ -42,11 +42,13 @@ app = FastAPI(
     version="5.0.0",
     description="Production-grade Python static analysis with AST-based change detection"
 )
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=[
+        "https://cronoscodeanalyzer.vercel.app",   # your frontend
+        "https://finalyearproject-3-n6xk.onrender.com"
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
