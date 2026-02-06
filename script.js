@@ -6,7 +6,7 @@ let lastReportId = null;
 let currentMode = null;
 let analysisInProgress = false;
 
-// 🔥 PRODUCTION: Use your Render backend URL
+// PRODUCTION: Use your Render backend URL
 const API_BASE = "https://finalyearproject-3-n6xk.onrender.com";
 
 // ========================================
@@ -230,12 +230,18 @@ async function testBackendConnection() {
   try {
     console.log('🔍 Testing backend connection to:', API_BASE);
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
     const response = await fetch(`${API_BASE}/`, {
       method: 'GET',
       headers: { 
         'Accept': 'application/json'
-      }
+      },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     if (response.ok) {
       const data = await response.json();
@@ -244,12 +250,16 @@ async function testBackendConnection() {
       return true;
     } else {
       console.error('✕ Backend error:', response.status);
-      Toast.show('Backend connection failed - Render may be sleeping. Please wait 30s and retry.', 'warning');
+      Toast.show('Backend returned error - Check Render logs', 'warning');
       return false;
     }
   } catch (e) {
     console.error('✕ Cannot reach backend:', e);
-    Toast.show('Backend is waking up... Please wait 30 seconds for Render.', 'warning');
+    if (e.name === 'AbortError') {
+      Toast.show('Backend timeout - Render may be sleeping. Wait 30s and retry.', 'warning');
+    } else {
+      Toast.show('Backend unreachable - Render may be sleeping. Wait 30s.', 'warning');
+    }
     return false;
   }
 }
@@ -296,10 +306,8 @@ async function runAnalysis() {
   
   analysisInProgress = true;
   
-  // Show loader
   Loader.show();
   
-  // Update button state
   const analyzeBtn = $('analyzeBtn');
   const analyzeBtnText = $('analyzeBtnText');
   const originalText = analyzeBtnText.textContent;
@@ -307,10 +315,8 @@ async function runAnalysis() {
   analyzeBtnText.textContent = 'Analyzing...';
   analyzeBtn.disabled = true;
   
-  // Update progress
   ProgressTracker.update(4);
   
-  // Build payload
   const payload = {
     mode: currentMode,
     source_code: $('sourceCode')?.value || '',
@@ -330,14 +336,20 @@ async function runAnalysis() {
     console.log('→ Sending analysis request to:', `${API_BASE}/analyze`);
     console.log('  Payload:', payload);
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    
     const response = await fetch(`${API_BASE}/analyze`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     console.log('  Response status:', response.status);
     
@@ -353,27 +365,24 @@ async function runAnalysis() {
     lastAnalysisResult = data;
     lastReportId = data.report_id;
     
-    // Hide loader before showing results
     Loader.hide();
     
-    // Render results
     renderResults(data);
     
-    // Show success toast
     Toast.show(`Analysis complete: ${data.status}`, data.status === 'PASS' ? 'success' : 'warning');
     
   } catch (error) {
     console.error('✕ Analysis error:', error);
     Loader.hide();
     
-    // Check if it's a network error (Render sleeping)
-    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      Toast.show('Backend is sleeping on Render. Please wait 30 seconds and try again.', 'error');
+    if (error.name === 'AbortError') {
+      Toast.show('Request timeout - Backend may be overloaded. Try again.', 'error');
+    } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+      Toast.show('Cannot reach backend - Render may be sleeping. Wait 30s and retry.', 'error');
     } else {
       Toast.show(error.message || 'Analysis failed', 'error');
     }
   } finally {
-    // Reset button state
     analyzeBtnText.textContent = originalText;
     analyzeBtn.disabled = false;
     analysisInProgress = false;
@@ -391,10 +400,8 @@ function renderResults(data) {
   
   resultsSection.style.display = 'block';
   
-  // Set status class
   resultBox.className = `result-container status-${data.status.toLowerCase()}`;
   
-  // Build result HTML
   const html = `
     <div class="result-status-header">
       <h3 style="font-size: 1.5rem; margin-bottom: 0.5rem;">Analysis Complete</h3>
@@ -463,11 +470,9 @@ function renderResults(data) {
   
   resultBox.innerHTML = html;
   
-  // Show download buttons
   $('downloadJsonBtn').style.display = 'flex';
   $('downloadPdfBtn').style.display = 'flex';
   
-  // Scroll to results
   setTimeout(() => {
     resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 100);
@@ -514,17 +519,14 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('API Base:', API_BASE);
   console.log('═'.repeat(60));
   
-  // Initialize components
   Toast.init();
   Loader.init();
   CharCounter.initAll();
   
-  // Test backend connection
   setTimeout(() => {
     testBackendConnection();
   }, 1500);
   
-  // Mode selection buttons
   $$('.mode-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       const mode = this.getAttribute('data-mode');
@@ -532,7 +534,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   
-  // Navigation buttons
   $('backToModeBtn')?.addEventListener('click', goBackToModeSelection);
   $('clearAllBtn')?.addEventListener('click', () => {
     if (confirm('Clear all fields?')) {
@@ -541,17 +542,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Analysis button
   $('analyzeBtn')?.addEventListener('click', (e) => {
     e.preventDefault();
     runAnalysis();
   });
   
-  // Download buttons
   $('downloadJsonBtn')?.addEventListener('click', downloadJSON);
   $('downloadPdfBtn')?.addEventListener('click', downloadPDF);
   
-  // Textarea auto-resize and character counting
   $$('textarea.code-input').forEach(textarea => {
     autoResize(textarea);
     
@@ -559,7 +557,6 @@ document.addEventListener('DOMContentLoaded', () => {
       autoResize(textarea);
       CharCounter.update(textarea.id);
       
-      // Update progress based on filled fields
       const sourceCode = $('sourceCode')?.value.trim();
       const expectedOutput = $('expectedOutput')?.value.trim();
       
@@ -573,9 +570,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   
-  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    // Ctrl/Cmd + Enter to analyze
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       if (currentMode && $('analyzeBtn')) {
         e.preventDefault();
@@ -583,7 +578,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     
-    // Escape to go back
     if (e.key === 'Escape' && currentMode) {
       goBackToModeSelection();
     }
