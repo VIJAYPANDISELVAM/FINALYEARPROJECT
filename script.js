@@ -6,25 +6,8 @@ let lastReportId = null;
 let currentMode = null;
 let analysisInProgress = false;
 
+// PRODUCTION: Corrected Render backend URL
 const API_BASE = "https://final-a8su.onrender.com";
-```
-
----
-
-# ✅ Render Environment Variables
-
-Set in Render Dashboard → Environment:
-```
-PORT=10000
-```
-
----
-
-# ✅ Render Start Command
-
-Ensure this is set in Render Dashboard → Settings → Start Command:
-```
-uvicorn app:app --host 0.0.0.0 --port $PORT
 
 // ========================================
 // Utility Functions
