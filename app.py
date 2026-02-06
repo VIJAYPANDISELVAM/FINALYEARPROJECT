@@ -52,13 +52,12 @@ app.add_middleware(
         "http://localhost:5500",
         "http://127.0.0.1:5500"
     ],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Accept", "Authorization"],
     expose_headers=["Content-Disposition"],
     max_age=3600
 )
-
 
 # ============================================================================
 # STORAGE
