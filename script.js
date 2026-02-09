@@ -1,12 +1,12 @@
 // CRONOS Professional - Production Configuration
-// Version: 3.2 Professional - Vercel + Render
+// Version: 3.2.1 Professional - Vercel + Render (FIXED)
 
 let lastAnalysisResult = null;
 let lastReportId = null;
 let currentMode = null;
 let analysisInProgress = false;
 
-// PRODUCTION: Corrected Render backend URL
+// PRODUCTION: Render backend URL
 const API_BASE = "https://final-a8su.onrender.com";
 
 // ========================================
@@ -224,14 +224,15 @@ function clearAllFields() {
 }
 
 // ========================================
-// Backend Connection Test
+// Backend Connection Test (FIXED)
 // ========================================
 async function testBackendConnection() {
   try {
     console.log('🔍 Testing backend connection to:', API_BASE);
     
+    // Increased timeout to 30 seconds for Render cold start
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     
     const response = await fetch(`${API_BASE}/`, {
       method: 'GET',
@@ -250,15 +251,18 @@ async function testBackendConnection() {
       return true;
     } else {
       console.error('✕ Backend error:', response.status);
-      Toast.show('Backend returned error - Check Render logs', 'warning');
+      Toast.show(`Backend returned error (${response.status})`, 'warning');
       return false;
     }
   } catch (e) {
-    console.error('✕ Cannot reach backend:', e);
+    console.error('✕ Cannot reach backend:', e.message);
     if (e.name === 'AbortError') {
-      Toast.show('Backend timeout - Render may be sleeping. Wait 30s and retry.', 'warning');
+      console.warn('Backend timeout - Service may be waking up from sleep');
+      Toast.show('Backend is starting up (Render cold start). Please wait 30-60s and try again.', 'warning');
+    } else if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+      Toast.show('Cannot reach backend - Check your internet connection or Render service status', 'error');
     } else {
-      Toast.show('Backend unreachable - Render may be sleeping. Wait 30s.', 'warning');
+      Toast.show('Backend connection error - Service may be unavailable', 'error');
     }
     return false;
   }
@@ -289,7 +293,7 @@ function validateFields() {
 }
 
 // ========================================
-// Run Analysis
+// Run Analysis (FIXED)
 // ========================================
 async function runAnalysis() {
   if (!currentMode) {
@@ -336,8 +340,9 @@ async function runAnalysis() {
     console.log('→ Sending analysis request to:', `${API_BASE}/analyze`);
     console.log('  Payload:', payload);
     
+    // Increased timeout to 90 seconds for AI processing
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
     
     const response = await fetch(`${API_BASE}/analyze`, {
       method: 'POST',
@@ -376,9 +381,9 @@ async function runAnalysis() {
     Loader.hide();
     
     if (error.name === 'AbortError') {
-      Toast.show('Request timeout - Backend may be overloaded. Try again.', 'error');
+      Toast.show('Analysis timeout (90s) - Backend may be processing. Try again or reduce code complexity.', 'error');
     } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-      Toast.show('Cannot reach backend - Render may be sleeping. Wait 30s and retry.', 'error');
+      Toast.show('Cannot reach backend - Check connection or wait for Render service to wake up (30-60s)', 'error');
     } else {
       Toast.show(error.message || 'Analysis failed', 'error');
     }
@@ -514,7 +519,7 @@ function escapeHtml(text) {
 // ========================================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('═'.repeat(60));
-  console.log('CRONOS Professional v3.2 - Initializing');
+  console.log('CRONOS Professional v3.2.1 - Initializing');
   console.log('Environment: PRODUCTION (Vercel + Render)');
   console.log('API Base:', API_BASE);
   console.log('═'.repeat(60));
@@ -523,9 +528,10 @@ document.addEventListener('DOMContentLoaded', () => {
   Loader.init();
   CharCounter.initAll();
   
+  // Wait 2 seconds before testing backend to allow page to fully load
   setTimeout(() => {
     testBackendConnection();
-  }, 1500);
+  }, 2000);
   
   $$('.mode-btn').forEach(btn => {
     btn.addEventListener('click', function() {
