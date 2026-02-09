@@ -1,5 +1,5 @@
-// CRONOS Professional - Production Configuration
-// Version: 3.2.2 Professional - Vercel + Render (BUG FIXED)
+// CRONOS - Enhanced UI Compatible Script
+// Production Configuration - Vercel + Render
 
 let lastAnalysisResult = null;
 let lastReportId = null;
@@ -56,7 +56,7 @@ const Toast = {
 // ========================================
 const Loader = {
   element: null,
-  steps: ['Parsing AST', 'Semantic Analysis', 'Risk Assessment', 'AI Validation'],
+  steps: ['AST Parsing', 'Semantic Analysis', 'Risk Assessment', 'AI Validation'],
   currentStep: 0,
   stepInterval: null,
   
@@ -94,7 +94,7 @@ const Loader = {
   },
   
   updateSteps() {
-    const stepElements = $$('.status-steps .step');
+    const stepElements = $$('.analysis-stages .stage-row');
     stepElements.forEach((el, index) => {
       el.classList.toggle('active', index === this.currentStep);
     });
@@ -106,7 +106,7 @@ const Loader = {
 // ========================================
 const ProgressTracker = {
   update(step) {
-    const steps = $$('.tracker-step');
+    const steps = $$('.workflow-step');
     steps.forEach((el, index) => {
       if (index < step) {
         el.classList.add('completed');
@@ -121,7 +121,7 @@ const ProgressTracker = {
   },
   
   reset() {
-    const steps = $$('.tracker-step');
+    const steps = $$('.workflow-step');
     steps.forEach(el => {
       el.classList.remove('active', 'completed');
     });
@@ -139,7 +139,7 @@ const CharCounter = {
     if (!textarea || !counter) return;
     
     const length = textarea.value.length;
-    counter.textContent = `${length} char${length !== 1 ? 's' : ''}`;
+    counter.textContent = `${length} character${length !== 1 ? 's' : ''}`;
   },
   
   initAll() {
@@ -155,7 +155,7 @@ const CharCounter = {
 function autoResize(textarea) {
   if (!textarea) return;
   textarea.style.height = 'auto';
-  textarea.style.height = Math.max(textarea.scrollHeight, 120) + 'px';
+  textarea.style.height = Math.max(textarea.scrollHeight, 140) + 'px';
 }
 
 // ========================================
@@ -268,10 +268,9 @@ async function testBackendConnection() {
 }
 
 // ========================================
-// Field Validation (FIXED)
+// Field Validation
 // ========================================
 function validateFields() {
-  // FIXED: Use document.getElementById directly and ensure we're getting FRESH values
   const sourceCodeEl = document.getElementById('sourceCode');
   const oldConditionEl = document.getElementById('oldCondition');
   const newConditionEl = document.getElementById('newCondition');
@@ -282,17 +281,12 @@ function validateFields() {
   const newCondition = newConditionEl?.value?.trim() || '';
   const expectedOutput = expectedOutputEl?.value?.trim() || '';
   
-  // Debug logging to verify we're reading fresh values
   console.log('🔍 Field Validation:', {
     mode: currentMode,
     sourceCode_length: sourceCode.length,
-    sourceCode_preview: sourceCode.substring(0, 50),
     oldCondition_length: oldCondition.length,
-    oldCondition_preview: oldCondition.substring(0, 50),
     newCondition_length: newCondition.length,
-    newCondition_preview: newCondition.substring(0, 50),
-    expectedOutput_length: expectedOutput.length,
-    expectedOutput_preview: expectedOutput.substring(0, 50)
+    expectedOutput_length: expectedOutput.length
   });
   
   if (currentMode === 'COMPLIANCE') {
@@ -311,7 +305,7 @@ function validateFields() {
 }
 
 // ========================================
-// Run Analysis (FIXED)
+// Run Analysis
 // ========================================
 async function runAnalysis() {
   if (!currentMode) {
@@ -339,8 +333,6 @@ async function runAnalysis() {
   
   ProgressTracker.update(4);
   
-  // CRITICAL FIX: Read values directly from DOM elements using document.getElementById
-  // This ensures we ALWAYS get the CURRENT values, not cached ones
   const sourceCodeEl = document.getElementById('sourceCode');
   const oldConditionEl = document.getElementById('oldCondition');
   const newConditionEl = document.getElementById('newCondition');
@@ -348,7 +340,6 @@ async function runAnalysis() {
   const noBehaviorChangeEl = document.getElementById('noBehaviorChange');
   const allowBoundaryChangeEl = document.getElementById('allowBoundaryChange');
   
-  // Build payload with FRESH values
   const payload = {
     mode: currentMode,
     source_code: sourceCodeEl?.value || '',
@@ -364,24 +355,18 @@ async function runAnalysis() {
     payload.new_condition = newConditionEl?.value || '';
   }
   
-  // DEBUG: Log what we're actually sending
   console.log('📤 Sending Analysis Request:', {
     mode: payload.mode,
     source_code_length: payload.source_code.length,
-    source_code_preview: payload.source_code.substring(0, 100),
     old_condition_length: payload.old_condition?.length || 0,
-    old_condition_preview: payload.old_condition?.substring(0, 100) || 'N/A',
     new_condition_length: payload.new_condition?.length || 0,
-    new_condition_preview: payload.new_condition?.substring(0, 100) || 'N/A',
     expected_output_length: payload.expected_output.length,
-    expected_output_preview: payload.expected_output.substring(0, 100),
     constraints: payload.constraints
   });
   
   try {
     console.log('→ Sending analysis request to:', `${API_BASE}/analyze`);
     
-    // Increased timeout to 90 seconds for AI processing
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 90000);
     
@@ -446,7 +431,7 @@ function renderResults(data) {
   
   resultsSection.style.display = 'block';
   
-  resultBox.className = `result-container status-${data.status.toLowerCase()}`;
+  resultBox.className = `results-container status-${data.status.toLowerCase()}`;
   
   const html = `
     <div class="result-status-header">
@@ -462,7 +447,7 @@ function renderResults(data) {
       <div style="margin-bottom: 2rem;">
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Analysis Findings</h4>
         ${data.analyzer_findings.map(f => `
-          <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+          <div style="background: var(--color-bg-primary); border: 1px solid var(--border-primary); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.5rem;">
               <strong style="color: var(--color-text-primary);">${escapeHtml(f.name)}</strong>
               <span style="padding: 0.25rem 0.75rem; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--color-error); border-radius: 12px; font-size: 0.75rem; color: var(--color-error); font-weight: 600;">Risk: ${f.risk}</span>
@@ -482,7 +467,7 @@ function renderResults(data) {
     ${data.technical_explanation ? `
       <div style="margin-bottom: 2rem;">
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Technical Explanation</h4>
-        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--border-primary); border-radius: 10px; padding: 1.5rem;">
           <p style="color: var(--color-text-secondary); line-height: 1.8; white-space: pre-wrap;">${escapeHtml(data.technical_explanation)}</p>
         </div>
       </div>
@@ -491,7 +476,7 @@ function renderResults(data) {
     ${data.human_explanation ? `
       <div style="margin-bottom: 2rem;">
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">Human-Readable Explanation</h4>
-        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--border-primary); border-radius: 10px; padding: 1.5rem;">
           <p style="color: var(--color-text-secondary); line-height: 1.8; white-space: pre-wrap;">${escapeHtml(data.human_explanation)}</p>
         </div>
       </div>
@@ -500,17 +485,17 @@ function renderResults(data) {
     ${data.ai_solution ? `
       <div style="margin-bottom: 2rem;">
         <h4 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-primary);">AI Recommendations</h4>
-        <div style="background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; padding: 1.5rem;">
+        <div style="background: var(--color-bg-primary); border: 1px solid var(--border-primary); border-radius: 10px; padding: 1.5rem;">
           <p style="color: var(--color-text-secondary); line-height: 1.8; white-space: pre-wrap;">${escapeHtml(data.ai_solution)}</p>
         </div>
       </div>
     ` : ''}
     
     <details style="margin-top: 2rem;">
-      <summary style="cursor: pointer; font-weight: 600; padding: 1rem; background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-primary);">
+      <summary style="cursor: pointer; font-weight: 600; padding: 1rem; background: var(--color-bg-primary); border: 1px solid var(--border-primary); border-radius: 10px; color: var(--color-text-primary);">
         View Technical Details
       </summary>
-      <pre style="margin-top: 1rem; padding: 1.5rem; background: var(--color-bg-primary); border: 1px solid var(--color-border); border-radius: 10px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-text-tertiary); white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(data.semantic_signals || {}, null, 2)}</pre>
+      <pre style="margin-top: 1rem; padding: 1.5rem; background: var(--color-bg-primary); border: 1px solid var(--border-primary); border-radius: 10px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-text-tertiary); white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(data.semantic_signals || {}, null, 2)}</pre>
     </details>
   `;
   
@@ -560,45 +545,64 @@ function escapeHtml(text) {
 // ========================================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('═'.repeat(60));
-  console.log('CRONOS Professional v3.2.2 - Initializing (BUG FIXED)');
+  console.log('CRONOS - Enhanced UI - Initializing');
   console.log('Environment: PRODUCTION (Vercel + Render)');
   console.log('API Base:', API_BASE);
-  console.log('Fix Applied: Fresh DOM reads prevent stale data');
   console.log('═'.repeat(60));
   
   Toast.init();
   Loader.init();
   CharCounter.initAll();
   
-  // Wait 2 seconds before testing backend to allow page to fully load
   setTimeout(() => {
     testBackendConnection();
   }, 2000);
   
-  $$('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+  // Mode selection buttons - NEW CLASS NAMES
+  $$('.mode-action-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
       const mode = this.getAttribute('data-mode');
-      selectMode(mode);
+      if (mode) {
+        selectMode(mode);
+      }
     });
   });
   
-  $('backToModeBtn')?.addEventListener('click', goBackToModeSelection);
-  $('clearAllBtn')?.addEventListener('click', () => {
+  // Back button
+  $('backToModeBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackToModeSelection();
+  });
+  
+  // Clear button
+  $('clearAllBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
     if (confirm('Clear all fields?')) {
       clearAllFields();
       Toast.show('All fields cleared', 'success');
     }
   });
   
+  // Analyze button
   $('analyzeBtn')?.addEventListener('click', (e) => {
     e.preventDefault();
     runAnalysis();
   });
   
-  $('downloadJsonBtn')?.addEventListener('click', downloadJSON);
-  $('downloadPdfBtn')?.addEventListener('click', downloadPDF);
+  // Download buttons
+  $('downloadJsonBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    downloadJSON();
+  });
   
-  $$('textarea.code-input').forEach(textarea => {
+  $('downloadPdfBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    downloadPDF();
+  });
+  
+  // Textarea auto-resize and character counting - NEW CLASS NAME
+  $$('textarea.code-textarea').forEach(textarea => {
     autoResize(textarea);
     
     textarea.addEventListener('input', () => {
@@ -618,6 +622,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   
+  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       if (currentMode && $('analyzeBtn')) {
@@ -635,6 +640,5 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('  Keyboard shortcuts:');
   console.log('  • Ctrl+Enter - Run analysis');
   console.log('  • Escape - Return to mode selection');
-  console.log('  BUG FIX: All textarea reads now use fresh DOM queries');
   console.log('═'.repeat(60));
 });
