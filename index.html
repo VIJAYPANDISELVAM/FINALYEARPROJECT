@@ -3,302 +3,527 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CRONOS | Static Code Analysis Platform</title>
+  <title>CRONOS | Advanced Static Code Analysis Platform</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 
 <body>
-  <!-- Animated Background -->
-  <div class="bg-particles"></div>
-  <div class="bg-grid"></div>
+  <!-- Immersive Gradient Background System -->
+  <div class="background-system">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+    <div class="mesh-pattern"></div>
+    <div class="noise-texture"></div>
+  </div>
 
-  <!-- Analysis Loader Overlay -->
+  <!-- Advanced Analysis Loader -->
   <div id="analysisLoader" class="analysis-loader">
-    <div class="loader-content">
-      <div class="loader-visual">
-        <div class="code-scanner">
-          <div class="scan-line"></div>
-          <div class="scan-grid"></div>
+    <div class="loader-wrapper">
+      <div class="loader-visual-container">
+        <!-- Neural Processing Animation -->
+        <div class="neural-processor">
+          <div class="processor-rings">
+            <div class="ring ring-outer"></div>
+            <div class="ring ring-middle"></div>
+            <div class="ring ring-inner"></div>
+          </div>
+          <div class="processor-core">
+            <svg class="processor-icon" viewBox="0 0 24 24" fill="none">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="scan-rays">
+            <div class="ray ray-1"></div>
+            <div class="ray ray-2"></div>
+            <div class="ray ray-3"></div>
+            <div class="ray ray-4"></div>
+          </div>
         </div>
-        <svg class="loader-logo" viewBox="0 0 100 100">
-          <path class="logo-path" d="M20,30 Q15,30 15,35 L15,47 Q15,52 10,52 Q15,52 15,57 L15,70 Q15,75 20,75" 
-                stroke="currentColor" stroke-width="2.5" fill="none"/>
-          <path class="logo-path" d="M80,30 Q85,30 85,35 L85,47 Q85,52 90,52 Q85,52 85,57 L85,70 Q85,75 80,75" 
-                stroke="currentColor" stroke-width="2.5" fill="none"/>
-          <circle class="logo-dot" cx="50" cy="52" r="3" fill="currentColor"/>
-        </svg>
-      </div>
-      <div class="loader-status">
-        <div class="status-text">Analyzing Code</div>
-        <div class="status-steps">
-          <span class="step active">Parsing AST</span>
-          <span class="step">Semantic Analysis</span>
-          <span class="step">Risk Assessment</span>
-          <span class="step">AI Validation</span>
+        
+        <!-- Data Particles -->
+        <div class="data-particles">
+          <div class="particle"></div>
+          <div class="particle"></div>
+          <div class="particle"></div>
+          <div class="particle"></div>
+          <div class="particle"></div>
         </div>
       </div>
-      <div class="loader-progress">
-        <div class="progress-fill"></div>
+
+      <!-- Loader Status Information -->
+      <div class="loader-status-panel">
+        <h3 class="loader-heading">Processing Analysis</h3>
+        <p class="loader-subtext">Validating code structure and behavior patterns</p>
+        
+        <div class="analysis-stages">
+          <div class="stage-row active">
+            <div class="stage-indicator">
+              <div class="indicator-dot"></div>
+              <div class="indicator-pulse"></div>
+            </div>
+            <span class="stage-name">AST Parsing</span>
+          </div>
+          <div class="stage-row">
+            <div class="stage-indicator">
+              <div class="indicator-dot"></div>
+            </div>
+            <span class="stage-name">Semantic Analysis</span>
+          </div>
+          <div class="stage-row">
+            <div class="stage-indicator">
+              <div class="indicator-dot"></div>
+            </div>
+            <span class="stage-name">Risk Assessment</span>
+          </div>
+          <div class="stage-row">
+            <div class="stage-indicator">
+              <div class="indicator-dot"></div>
+            </div>
+            <span class="stage-name">AI Validation</span>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="loader-progress-container">
+          <div class="progress-track">
+            <div class="progress-fill"></div>
+            <div class="progress-glow"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Toast Container -->
+  <!-- Toast Notification System -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <!-- Navigation Header -->
-  <nav class="nav-header">
-    <div class="nav-container">
-      <div class="nav-brand">
-        <svg class="brand-logo" viewBox="0 0 100 100">
-          <defs>
-            <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#00d4ff"/>
-              <stop offset="100%" stop-color="#7b2ff7"/>
-            </linearGradient>
-          </defs>
-          <path d="M20,30 Q15,30 15,35 L15,47 Q15,52 10,52 Q15,52 15,57 L15,70 Q15,75 20,75" 
-                stroke="url(#brandGradient)" stroke-width="3" fill="none" stroke-linecap="round"/>
-          <path d="M80,30 Q85,30 85,35 L85,47 Q85,52 90,52 Q85,52 85,57 L85,70 Q85,75 80,75" 
-                stroke="url(#brandGradient)" stroke-width="3" fill="none" stroke-linecap="round"/>
-          <circle cx="50" cy="52" r="4" fill="url(#brandGradient)">
-            <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
-          </circle>
-        </svg>
-        <div class="brand-text">
-          <h1 class="brand-name">CRONOS</h1>
-          <p class="brand-tagline">Static Analysis Platform</p>
+  <!-- Premium Navigation Header -->
+  <header class="main-header">
+    <nav class="nav-container">
+      <div class="nav-brand-section">
+        <div class="brand-logo-wrapper">
+          <svg class="brand-logo" viewBox="0 0 100 100">
+            <defs>
+              <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00d4ff"/>
+                <stop offset="50%" stop-color="#7b2ff7"/>
+                <stop offset="100%" stop-color="#00d4ff"/>
+              </linearGradient>
+              <filter id="logoGlow">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#logoGlow)">
+              <path d="M20,30 Q15,30 15,35 L15,47 Q15,52 10,52 Q15,52 15,57 L15,70 Q15,75 20,75" 
+                    stroke="url(#logoGradient)" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+              <path d="M80,30 Q85,30 85,35 L85,47 Q85,52 90,52 Q85,52 85,57 L85,70 Q85,75 80,75" 
+                    stroke="url(#logoGradient)" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+              <circle cx="50" cy="52" r="5" fill="url(#logoGradient)">
+                <animate attributeName="r" values="4;6;4" dur="2s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" values="1;0.6;1" dur="2s" repeatCount="indefinite"/>
+              </circle>
+            </g>
+          </svg>
+        </div>
+        <div class="brand-identity">
+          <h1 class="brand-title">CRONOS</h1>
+          <p class="brand-subtitle">Static Code Analysis</p>
         </div>
       </div>
-      <div class="nav-status">
-        <div class="status-indicator">
-          <span class="status-dot"></span>
-          <span class="status-label">System Active</span>
-        </div>
-      </div>
-    </div>
-  </nav>
 
-  <!-- Main Content -->
-  <main class="main-content">
-    <div class="content-wrapper">
+      <div class="nav-status-section">
+        <div class="system-status-badge">
+          <span class="status-pulse"></span>
+          <span class="status-text">System Online</span>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Application Content -->
+  <main class="app-main">
+    <div class="content-container">
       
-      <!-- Mode Selection Screen -->
-      <section id="modeSelectionPanel" class="mode-selection">
-        <div class="section-intro">
-          <h2 class="section-title">Select Analysis Mode</h2>
-          <p class="section-description">Choose the appropriate analysis method for your code validation requirements</p>
+      <!-- Analysis Mode Selection -->
+      <section id="modeSelectionPanel" class="mode-selection-screen">
+        <div class="section-header">
+          <div class="header-content">
+            <h2 class="section-title">
+              <span class="title-gradient">Choose Your Analysis Mode</span>
+            </h2>
+            <p class="section-subtitle">Select the validation method that best fits your code analysis requirements</p>
+          </div>
         </div>
 
-        <div class="mode-grid">
-          <article class="mode-option" data-mode="CHANGE">
-            <div class="mode-header">
-              <div class="mode-icon-wrapper">
-                <svg class="mode-icon" viewBox="0 0 24 24" fill="none">
-                  <path d="M7 7h10M7 12h10M7 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <circle cx="18" cy="12" r="2" fill="currentColor"/>
-                </svg>
+        <div class="mode-cards-grid">
+          <!-- Change Analysis Mode -->
+          <article class="mode-card" data-mode="CHANGE">
+            <div class="card-glow"></div>
+            <div class="card-content">
+              <div class="card-header">
+                <div class="icon-container">
+                  <div class="icon-bg"></div>
+                  <svg class="mode-icon" viewBox="0 0 24 24" fill="none">
+                    <path d="M7 7h10M7 12h10M7 17h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                    <circle cx="18" cy="12" r="2.5" fill="currentColor"/>
+                  </svg>
+                </div>
+                <h3 class="card-title">Change Analysis</h3>
               </div>
-              <h3 class="mode-name">Change Analysis</h3>
+              
+              <p class="card-description">
+                Validate whether proposed logic modifications maintain contract compliance and behavioral integrity throughout your codebase
+              </p>
+              
+              <ul class="feature-list">
+                <li class="feature-item">
+                  <svg class="feature-icon" viewBox="0 0 20 20" fill="none">
+                    <path d="M7 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  <span>Differential code analysis</span>
+                </li>
+                <li class="feature-item">
+                  <svg class="feature-icon" viewBox="0 0 20 20" fill="none">
+                    <path d="M7 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  <span>Impact assessment reporting</span>
+                </li>
+                <li class="feature-item">
+                  <svg class="feature-icon" viewBox="0 0 20 20" fill="none">
+                    <path d="M7 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  <span>Contract validation checks</span>
+                </li>
+              </ul>
+
+              <button class="mode-action-btn" data-mode="CHANGE">
+                <span class="btn-text">Start Analysis</span>
+                <svg class="btn-arrow" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
             </div>
-            <p class="mode-desc">Validate whether proposed logic modifications maintain contract compliance and behavioral integrity</p>
-            <ul class="mode-features">
-              <li>Differential analysis</li>
-              <li>Impact assessment</li>
-              <li>Contract validation</li>
-            </ul>
-            <button class="mode-btn" data-mode="CHANGE">
-              <span>Initialize Analysis</span>
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
           </article>
 
-          <article class="mode-option" data-mode="COMPLIANCE">
-            <div class="mode-header">
-              <div class="mode-icon-wrapper">
-                <svg class="mode-icon" viewBox="0 0 24 24" fill="none">
-                  <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-                </svg>
+          <!-- Compliance Check Mode -->
+          <article class="mode-card" data-mode="COMPLIANCE">
+            <div class="card-glow"></div>
+            <div class="card-content">
+              <div class="card-header">
+                <div class="icon-container">
+                  <div class="icon-bg"></div>
+                  <svg class="mode-icon" viewBox="0 0 24 24" fill="none">
+                    <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+                  </svg>
+                </div>
+                <h3 class="card-title">Compliance Check</h3>
               </div>
-              <h3 class="mode-name">Compliance Check</h3>
+              
+              <p class="card-description">
+                Verify code adherence to expected behavioral specifications and ensure compliance across all execution paths
+              </p>
+              
+              <ul class="feature-list">
+                <li class="feature-item">
+                  <svg class="feature-icon" viewBox="0 0 20 20" fill="none">
+                    <path d="M7 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  <span>Contract verification engine</span>
+                </li>
+                <li class="feature-item">
+                  <svg class="feature-icon" viewBox="0 0 20 20" fill="none">
+                    <path d="M7 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  <span>Execution path analysis</span>
+                </li>
+                <li class="feature-item">
+                  <svg class="feature-icon" viewBox="0 0 20 20" fill="none">
+                    <path d="M7 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  <span>Specification matching</span>
+                </li>
+              </ul>
+
+              <button class="mode-action-btn" data-mode="COMPLIANCE">
+                <span class="btn-text">Start Check</span>
+                <svg class="btn-arrow" viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
             </div>
-            <p class="mode-desc">Verify code adherence to expected behavioral specifications across all execution paths</p>
-            <ul class="mode-features">
-              <li>Contract verification</li>
-              <li>Path analysis</li>
-              <li>Specification matching</li>
-            </ul>
-            <button class="mode-btn" data-mode="COMPLIANCE">
-              <span>Initialize Check</span>
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
           </article>
         </div>
       </section>
 
-      <!-- Analysis Form -->
-      <section id="analysisForm" class="analysis-form" style="display:none;">
+      <!-- Analysis Configuration Form -->
+      <section id="analysisForm" class="analysis-configuration" style="display:none;">
         
-        <!-- Progress Tracker -->
-        <div class="progress-tracker">
+        <!-- Enhanced Progress Tracker -->
+        <div class="workflow-tracker">
           <div class="tracker-line"></div>
-          <div class="tracker-step active" data-step="1">
-            <div class="step-marker">1</div>
-            <span class="step-label">Source</span>
-          </div>
-          <div class="tracker-step" data-step="2">
-            <div class="step-marker">2</div>
-            <span class="step-label">Conditions</span>
-          </div>
-          <div class="tracker-step" data-step="3">
-            <div class="step-marker">3</div>
-            <span class="step-label">Expected</span>
-          </div>
-          <div class="tracker-step" data-step="4">
-            <div class="step-marker">4</div>
-            <span class="step-label">Validate</span>
+          <div class="tracker-steps">
+            <div class="workflow-step active" data-step="1">
+              <div class="step-circle">
+                <div class="circle-inner">1</div>
+                <div class="circle-ring"></div>
+              </div>
+              <span class="step-label">Source Code</span>
+            </div>
+            <div class="workflow-step" data-step="2">
+              <div class="step-circle">
+                <div class="circle-inner">2</div>
+                <div class="circle-ring"></div>
+              </div>
+              <span class="step-label">Conditions</span>
+            </div>
+            <div class="workflow-step" data-step="3">
+              <div class="step-circle">
+                <div class="circle-inner">3</div>
+                <div class="circle-ring"></div>
+              </div>
+              <span class="step-label">Expected Output</span>
+            </div>
+            <div class="workflow-step" data-step="4">
+              <div class="step-circle">
+                <div class="circle-inner">4</div>
+                <div class="circle-ring"></div>
+              </div>
+              <span class="step-label">Validation</span>
+            </div>
           </div>
         </div>
 
-        <!-- Input Panels -->
-        <div class="form-panels">
+        <!-- Input Configuration Panels -->
+        <div class="config-panels">
           
-          <!-- Source Code Panel -->
-          <div class="input-panel">
-            <div class="panel-label">
-              <h3>Source Code</h3>
-              <span class="label-badge">Python</span>
-            </div>
-            <div class="input-field">
-              <textarea id="sourceCode" class="code-input" placeholder="Enter your Python source code here..."></textarea>
-              <div class="field-footer">
-                <span class="char-count" id="sourceCodeCounter">0 chars</span>
-                <span class="field-hint">Press Tab for indent</span>
+          <!-- Source Code Input -->
+          <div class="config-panel">
+            <div class="panel-header">
+              <div class="header-left">
+                <h3 class="panel-title">Source Code</h3>
+                <p class="panel-hint">Enter your Python code for analysis</p>
               </div>
+              <span class="language-badge">
+                <svg class="badge-icon" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+                  <path d="M8 12l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                Python
+              </span>
             </div>
-          </div>
-
-          <!-- Old Condition Panel -->
-          <div class="input-panel" id="oldConditionPanel">
-            <div class="panel-label">
-              <h3>Original Condition</h3>
-              <span class="label-badge">Before</span>
-            </div>
-            <div class="input-field">
-              <textarea id="oldCondition" class="code-input" placeholder="Original logic expression..."></textarea>
-              <div class="field-footer">
-                <span class="char-count" id="oldConditionCounter">0 chars</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- New Condition Panel -->
-          <div class="input-panel" id="newConditionPanel">
-            <div class="panel-label">
-              <h3>Modified Condition</h3>
-              <span class="label-badge">After</span>
-            </div>
-            <div class="input-field">
-              <textarea id="newCondition" class="code-input" placeholder="Modified logic expression..."></textarea>
-              <div class="field-footer">
-                <span class="char-count" id="newConditionCounter">0 chars</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Expected Output Panel -->
-          <div class="input-panel">
-            <div class="panel-label">
-              <h3 id="expectedOutputLabel">Expected Behavior</h3>
-              <span class="label-badge">Contract</span>
-            </div>
-            <div class="input-field">
-              <textarea id="expectedOutput" class="code-input" placeholder="Describe the expected behavior or output..."></textarea>
-              <div class="field-footer">
-                <span class="char-count" id="expectedOutputCounter">0 chars</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Constraints Panel -->
-          <div class="input-panel constraints-panel">
-            <div class="panel-label">
-              <h3>Analysis Constraints</h3>
-              <span class="label-badge">Optional</span>
-            </div>
-            <div class="constraints-grid">
-              <label class="constraint-item">
-                <input type="checkbox" id="noBehaviorChange">
-                <div class="constraint-content">
-                  <span class="constraint-name">Strict Mode</span>
-                  <span class="constraint-desc">No behavioral changes allowed</span>
+            <div class="panel-body">
+              <div class="input-wrapper">
+                <textarea 
+                  id="sourceCode" 
+                  class="code-textarea" 
+                  placeholder="def example_function():&#10;    # Your code here&#10;    pass"
+                  spellcheck="false"
+                ></textarea>
+                <div class="textarea-overlay">
+                  <div class="line-numbers" aria-hidden="true"></div>
                 </div>
-              </label>
-              <label class="constraint-item">
-                <input type="checkbox" id="allowBoundaryChange">
-                <div class="constraint-content">
-                  <span class="constraint-name">Boundary Flex</span>
-                  <span class="constraint-desc">Allow edge case modifications</span>
-                </div>
-              </label>
+              </div>
+              <div class="panel-footer">
+                <span class="char-counter" id="sourceCodeCounter">0 characters</span>
+                <span class="input-tip">
+                  <svg class="tip-icon" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M8 11V8M8 5h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                  Tab for indentation
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Original Condition Input -->
+          <div class="config-panel" id="oldConditionPanel">
+            <div class="panel-header">
+              <div class="header-left">
+                <h3 class="panel-title">Original Condition</h3>
+                <p class="panel-hint">The existing logic expression</p>
+              </div>
+              <span class="version-badge badge-before">Before</span>
+            </div>
+            <div class="panel-body">
+              <div class="input-wrapper">
+                <textarea 
+                  id="oldCondition" 
+                  class="code-textarea" 
+                  placeholder="if x > 0 and y < 100:"
+                  spellcheck="false"
+                ></textarea>
+              </div>
+              <div class="panel-footer">
+                <span class="char-counter" id="oldConditionCounter">0 characters</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modified Condition Input -->
+          <div class="config-panel" id="newConditionPanel">
+            <div class="panel-header">
+              <div class="header-left">
+                <h3 class="panel-title">Modified Condition</h3>
+                <p class="panel-hint">The proposed logic changes</p>
+              </div>
+              <span class="version-badge badge-after">After</span>
+            </div>
+            <div class="panel-body">
+              <div class="input-wrapper">
+                <textarea 
+                  id="newCondition" 
+                  class="code-textarea" 
+                  placeholder="if x >= 0 and y <= 100:"
+                  spellcheck="false"
+                ></textarea>
+              </div>
+              <div class="panel-footer">
+                <span class="char-counter" id="newConditionCounter">0 characters</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Expected Behavior Input -->
+          <div class="config-panel">
+            <div class="panel-header">
+              <div class="header-left">
+                <h3 class="panel-title" id="expectedOutputLabel">Expected Behavior</h3>
+                <p class="panel-hint">Describe the desired outcome</p>
+              </div>
+              <span class="language-badge badge-contract">
+                <svg class="badge-icon" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                Contract
+              </span>
+            </div>
+            <div class="panel-body">
+              <div class="input-wrapper">
+                <textarea 
+                  id="expectedOutput" 
+                  class="code-textarea" 
+                  placeholder="The function should return True when x is positive and y is within range..."
+                  spellcheck="false"
+                ></textarea>
+              </div>
+              <div class="panel-footer">
+                <span class="char-counter" id="expectedOutputCounter">0 characters</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Analysis Constraints -->
+          <div class="config-panel constraints-panel">
+            <div class="panel-header">
+              <div class="header-left">
+                <h3 class="panel-title">Analysis Constraints</h3>
+                <p class="panel-hint">Configure validation parameters</p>
+              </div>
+              <span class="optional-badge">Optional</span>
+            </div>
+            <div class="panel-body">
+              <div class="constraints-grid">
+                <label class="constraint-option">
+                  <input type="checkbox" id="noBehaviorChange" class="constraint-checkbox">
+                  <div class="constraint-card">
+                    <div class="checkbox-visual">
+                      <svg class="check-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8l4 4 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="constraint-info">
+                      <span class="constraint-title">Strict Behavior Mode</span>
+                      <span class="constraint-description">No behavioral modifications allowed</span>
+                    </div>
+                  </div>
+                </label>
+                
+                <label class="constraint-option">
+                  <input type="checkbox" id="allowBoundaryChange" class="constraint-checkbox">
+                  <div class="constraint-card">
+                    <div class="checkbox-visual">
+                      <svg class="check-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 8l4 4 6-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="constraint-info">
+                      <span class="constraint-title">Boundary Flexibility</span>
+                      <span class="constraint-description">Allow edge case adjustments</span>
+                    </div>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 
         </div>
 
-        <!-- Action Bar -->
-        <div class="action-bar">
-          <button id="backToModeBtn" class="btn-secondary">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-            <span>Back</span>
-          </button>
-          <div class="action-spacer"></div>
-          <button id="clearAllBtn" class="btn-ghost">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M3 6h18M8 6V4h8v2M19 6v14H5V6h14z" stroke="currentColor" stroke-width="2"/>
-            </svg>
-            <span>Clear</span>
-          </button>
-          <button id="analyzeBtn" class="btn-primary">
-            <span id="analyzeBtnText">Run Analysis</span>
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
-              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
+        <!-- Action Control Bar -->
+        <div class="control-bar">
+          <div class="control-left">
+            <button id="backToModeBtn" class="control-btn btn-secondary">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+                <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Back to Modes</span>
+            </button>
+          </div>
+          
+          <div class="control-right">
+            <button id="clearAllBtn" class="control-btn btn-ghost">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+                <path d="M3 6h18M8 6V4h8v2M19 6v14H5V6h14z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Clear All</span>
+            </button>
+            
+            <button id="analyzeBtn" class="control-btn btn-primary">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span id="analyzeBtnText">Run Analysis</span>
+              <div class="btn-shimmer"></div>
+            </button>
+          </div>
         </div>
 
-        <!-- Results Panel -->
-        <div id="resultsSection" class="results-section" style="display:none;">
-          <div class="results-header">
-            <h2>Analysis Results</h2>
+        <!-- Results Display Section -->
+        <div id="resultsSection" class="results-display" style="display:none;">
+          <div class="results-header-bar">
+            <div class="results-title-section">
+              <h2 class="results-title">Analysis Results</h2>
+              <p class="results-subtitle">Comprehensive validation report</p>
+            </div>
             <div class="results-actions">
-              <button id="downloadJsonBtn" class="btn-icon-only">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <button id="downloadJsonBtn" class="export-btn">
+                <svg class="export-icon" viewBox="0 0 24 24" fill="none">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
-                <span>JSON</span>
+                <span>Export JSON</span>
               </button>
-              <button id="downloadPdfBtn" class="btn-icon-only">
-                <svg viewBox="0 0 24 24" fill="none">
+              <button id="downloadPdfBtn" class="export-btn">
+                <svg class="export-icon" viewBox="0 0 24 24" fill="none">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="2"/>
-                  <path d="M14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                  <path d="M14 2v6h6M9 13h6M9 17h6M9 9h1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
-                <span>PDF</span>
+                <span>Export PDF</span>
               </button>
             </div>
           </div>
-          <div id="resultBox" class="result-container">
-            <!-- Results will be injected here -->
+          
+          <div id="resultBox" class="results-container">
+            <!-- Analysis results will be dynamically injected here -->
           </div>
         </div>
 
@@ -307,11 +532,13 @@
     </div>
   </main>
 
-  <!-- Footer -->
-  <footer class="site-footer">
-    <div class="footer-content">
-      <p class="footer-text">CRONOS v3.2 • Contract-First Static Analysis Engine</p>
-      <p class="footer-meta">Powered by FastAPI + Gemini AI</p>
+  <!-- Enhanced Footer -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <div class="footer-content">
+        <p class="footer-brand">CRONOS • Advanced Static Code Analysis Platform</p>
+        <p class="footer-tech">Powered by FastAPI & Gemini AI</p>
+      </div>
     </div>
   </footer>
 
