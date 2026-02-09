@@ -1,5 +1,5 @@
 // CRONOS Professional - Production Configuration
-// Version: 3.2.1 Professional - Vercel + Render (FIXED)
+// Version: 3.2.2 Professional - Vercel + Render (BUG FIXED)
 
 let lastAnalysisResult = null;
 let lastReportId = null;
@@ -224,13 +224,12 @@ function clearAllFields() {
 }
 
 // ========================================
-// Backend Connection Test (FIXED)
+// Backend Connection Test
 // ========================================
 async function testBackendConnection() {
   try {
     console.log('🔍 Testing backend connection to:', API_BASE);
     
-    // Increased timeout to 30 seconds for Render cold start
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
     
@@ -269,13 +268,32 @@ async function testBackendConnection() {
 }
 
 // ========================================
-// Field Validation
+// Field Validation (FIXED)
 // ========================================
 function validateFields() {
-  const sourceCode = $('sourceCode')?.value.trim();
-  const oldCondition = $('oldCondition')?.value.trim();
-  const newCondition = $('newCondition')?.value.trim();
-  const expectedOutput = $('expectedOutput')?.value.trim();
+  // FIXED: Use document.getElementById directly and ensure we're getting FRESH values
+  const sourceCodeEl = document.getElementById('sourceCode');
+  const oldConditionEl = document.getElementById('oldCondition');
+  const newConditionEl = document.getElementById('newCondition');
+  const expectedOutputEl = document.getElementById('expectedOutput');
+  
+  const sourceCode = sourceCodeEl?.value?.trim() || '';
+  const oldCondition = oldConditionEl?.value?.trim() || '';
+  const newCondition = newConditionEl?.value?.trim() || '';
+  const expectedOutput = expectedOutputEl?.value?.trim() || '';
+  
+  // Debug logging to verify we're reading fresh values
+  console.log('🔍 Field Validation:', {
+    mode: currentMode,
+    sourceCode_length: sourceCode.length,
+    sourceCode_preview: sourceCode.substring(0, 50),
+    oldCondition_length: oldCondition.length,
+    oldCondition_preview: oldCondition.substring(0, 50),
+    newCondition_length: newCondition.length,
+    newCondition_preview: newCondition.substring(0, 50),
+    expectedOutput_length: expectedOutput.length,
+    expectedOutput_preview: expectedOutput.substring(0, 50)
+  });
   
   if (currentMode === 'COMPLIANCE') {
     if (!sourceCode || !expectedOutput) {
@@ -321,24 +339,47 @@ async function runAnalysis() {
   
   ProgressTracker.update(4);
   
+  // CRITICAL FIX: Read values directly from DOM elements using document.getElementById
+  // This ensures we ALWAYS get the CURRENT values, not cached ones
+  const sourceCodeEl = document.getElementById('sourceCode');
+  const oldConditionEl = document.getElementById('oldCondition');
+  const newConditionEl = document.getElementById('newCondition');
+  const expectedOutputEl = document.getElementById('expectedOutput');
+  const noBehaviorChangeEl = document.getElementById('noBehaviorChange');
+  const allowBoundaryChangeEl = document.getElementById('allowBoundaryChange');
+  
+  // Build payload with FRESH values
   const payload = {
     mode: currentMode,
-    source_code: $('sourceCode')?.value || '',
-    expected_output: $('expectedOutput')?.value || '',
+    source_code: sourceCodeEl?.value || '',
+    expected_output: expectedOutputEl?.value || '',
     constraints: {
-      no_behavior_change: $('noBehaviorChange')?.checked || false,
-      allow_boundary_change: $('allowBoundaryChange')?.checked || false
+      no_behavior_change: noBehaviorChangeEl?.checked || false,
+      allow_boundary_change: allowBoundaryChangeEl?.checked || false
     }
   };
   
   if (currentMode === 'CHANGE') {
-    payload.old_condition = $('oldCondition')?.value || '';
-    payload.new_condition = $('newCondition')?.value || '';
+    payload.old_condition = oldConditionEl?.value || '';
+    payload.new_condition = newConditionEl?.value || '';
   }
+  
+  // DEBUG: Log what we're actually sending
+  console.log('📤 Sending Analysis Request:', {
+    mode: payload.mode,
+    source_code_length: payload.source_code.length,
+    source_code_preview: payload.source_code.substring(0, 100),
+    old_condition_length: payload.old_condition?.length || 0,
+    old_condition_preview: payload.old_condition?.substring(0, 100) || 'N/A',
+    new_condition_length: payload.new_condition?.length || 0,
+    new_condition_preview: payload.new_condition?.substring(0, 100) || 'N/A',
+    expected_output_length: payload.expected_output.length,
+    expected_output_preview: payload.expected_output.substring(0, 100),
+    constraints: payload.constraints
+  });
   
   try {
     console.log('→ Sending analysis request to:', `${API_BASE}/analyze`);
-    console.log('  Payload:', payload);
     
     // Increased timeout to 90 seconds for AI processing
     const controller = new AbortController();
@@ -519,9 +560,10 @@ function escapeHtml(text) {
 // ========================================
 document.addEventListener('DOMContentLoaded', () => {
   console.log('═'.repeat(60));
-  console.log('CRONOS Professional v3.2.1 - Initializing');
+  console.log('CRONOS Professional v3.2.2 - Initializing (BUG FIXED)');
   console.log('Environment: PRODUCTION (Vercel + Render)');
   console.log('API Base:', API_BASE);
+  console.log('Fix Applied: Fresh DOM reads prevent stale data');
   console.log('═'.repeat(60));
   
   Toast.init();
@@ -593,5 +635,6 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('  Keyboard shortcuts:');
   console.log('  • Ctrl+Enter - Run analysis');
   console.log('  • Escape - Return to mode selection');
+  console.log('  BUG FIX: All textarea reads now use fresh DOM queries');
   console.log('═'.repeat(60));
 });
