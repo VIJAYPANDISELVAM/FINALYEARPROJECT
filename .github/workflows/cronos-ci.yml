@@ -1,0 +1,138 @@
+name: CRONOS Code Guard
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  cronos_analysis:
+    runs-on: ubuntu-latest
+    name: CRONOS CI Scanner
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # IMPORTANT for reliable diffs
+
+      - name: Collect changed files
+        id: changes
+        run: |
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            git diff --name-only HEAD~1 HEAD > changed_files.txt
+            git diff HEAD~1 HEAD > code_changes.txt
+          else
+            git ls-files > changed_files.txt
+            git show HEAD > code_changes.txt
+          fi
+
+          echo "Changed files:"
+          cat changed_files.txt
+
+          FILE_COUNT=$(wc -l < changed_files.txt)
+          echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Decide analysis mode automatically
+        id: mode
+        run: |
+          FILES=$(cat changed_files.txt)
+
+          if echo "$FILES" | grep -q "test"; then
+            MODE="STRICT"
+          elif echo "$FILES" | grep -q "api\|contract\|schema"; then
+            MODE="CONTRACT"
+          else
+            MODE="BOUNDARY"
+          fi
+
+          echo "Selected mode: $MODE"
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+
+      - name: Create CRONOS payload
+        run: |
+          python3 << 'EOF' > payload.json
+import json
+
+with open("code_changes.txt","r",errors="ignore") as f:
+    code = f.read()
+
+if len(code) > 50000:
+    code = code[:50000] + "\n\n[TRUNCATED]"
+
+payload = {
+  "old_code": "",
+  "new_code": code,
+  "mode": "${{ steps.mode.outputs.mode }}",
+  "repo": "${{ github.repository }}",
+  "branch": "${{ github.ref_name }}",
+  "commit": "${{ github.sha }}",
+  "actor": "${{ github.actor }}"
+}
+
+json.dump(payload, open("payload.json","w"), indent=2)
+EOF
+
+          echo "Payload ready:"
+          head -n 20 payload.json
+
+      - name: Send to CRONOS API
+        continue-on-error: true
+        run: |
+          curl -s -o response.json \
+            -X POST https://final-a8su.onrender.com/analyze_ci \
+            -H "Content-Type: application/json" \
+            -d @payload.json \
+            --max-time 120 || true
+
+          if [ ! -s response.json ]; then
+            cat > response.json << 'EOF'
+{
+  "risk": 0,
+  "status": "PASS",
+  "mode": "FALLBACK",
+  "findings_count": 0,
+  "summary": ["API unavailable - skipping analysis"],
+  "pass": true,
+  "warn": false,
+  "fail": false,
+  "api_error": true
+}
+EOF
+          fi
+
+      - name: Show CRONOS result
+        run: |
+          cat response.json | jq .
+
+      - name: Enforce risk policy
+        run: |
+          RISK=$(jq -r '.risk' response.json)
+          STATUS=$(jq -r '.status' response.json)
+          API_ERR=$(jq -r '.api_error' response.json)
+
+          echo "Risk = $RISK"
+
+          if [ "$API_ERR" = "true" ]; then
+            echo "⚠️ CRONOS API down — allowing deployment"
+            exit 0
+          fi
+
+          if [ "$RISK" -ge 60 ]; then
+            echo "❌ BLOCKED: Risk too high"
+            exit 1
+          else
+            echo "✅ Allowed"
+          fi
+
+      - name: Upload CRONOS report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cronos-report-${{ github.run_id }}
+          path: |
+            response.json
+            changed_files.txt
+            code_changes.txt
+            payload.json
