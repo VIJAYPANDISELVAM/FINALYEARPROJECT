@@ -48,11 +48,12 @@ app.add_middleware(
     allow_origins=[
         "*",  # GitHub Actions needs wildcard
         "https://cronoscodeanalyzer.vercel.app",
+        "https://github.com",
         "http://localhost:3000",
         "http://localhost:5500",
         "http://127.0.0.1:5500"
     ],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
@@ -318,9 +319,39 @@ class ChangeAnalyzer:
         if constraints is None:
             constraints = Constraint()
         
-        # Validate inputs
-        if not old.strip() or not new.strip():
-            return [], 0, {"error": "Empty code provided"}
+        # Handle empty old code (first commit case)
+        if not old.strip():
+            if not new.strip():
+                return [], 0, {"error": "Both old and new code are empty"}
+            # First commit - analyze new code structure only
+            try:
+                new_ast = safe_ast(new)
+                return [], 0, {
+                    "semantic_diff": False,
+                    "first_commit": True,
+                    "new_hash": hash_source(new),
+                    "conclusion": "First commit - baseline established"
+                }
+            except ValueError as e:
+                return [
+                    AnalyzerResult(
+                        name="ParseError",
+                        findings=[str(e)],
+                        risk=20,
+                        details={"error": str(e)}
+                    )
+                ], 20, {"parse_error": True}
+        
+        # Validate new code
+        if not new.strip():
+            return [
+                AnalyzerResult(
+                    name="CodeRemoval",
+                    findings=["All code removed - critical change"],
+                    risk=100,
+                    details={"change_type": "complete_removal"}
+                )
+            ], 100, {"all_code_removed": True}
 
         # Parse ASTs
         try:
@@ -372,7 +403,7 @@ class ChangeAnalyzer:
             risk_scores.append(operator_risk)
             change_details.update(operator_details)
 
-        # 2. Function analysis (FIXED: uses correct new_nodes)
+        # 2. Function analysis
         function_risk, function_findings, function_details = self._analyze_functions(
             old_nodes, new_nodes
         )
@@ -712,8 +743,6 @@ class ChangeAnalyzer:
         """
         Analyze function changes including renames, calls, and signatures.
         
-        CRITICAL FIX: Now correctly uses new_nodes for new_funcs
-        
         Risk justification:
         - Function rename (same structure): 35 - Semantic refactoring, impacts call sites
         - Function call change: 60 - Changes execution semantics, high impact
@@ -724,9 +753,9 @@ class ChangeAnalyzer:
         risk = 0
         details = {}
         
-        # CRITICAL FIX: Use correct nodes for comparison
+        # Use correct nodes for comparison
         old_funcs = {f['name']: f for f in old_nodes['functions']}
-        new_funcs = {f['name']: f for f in new_nodes['functions']}  # FIXED: was old_nodes
+        new_funcs = {f['name']: f for f in new_nodes['functions']}
         
         old_calls = set(old_nodes['calls'])
         new_calls = set(new_nodes['calls'])
@@ -843,7 +872,6 @@ class ChangeAnalyzer:
                 risk = max(risk, 60)
         
         # Function CALL changes (CRITICAL FOR TEST CASE)
-        # is_authenticated(user) → is_fully_authenticated(user)
         if old_calls != new_calls:
             added = new_calls - old_calls
             removed = old_calls - new_calls
@@ -1411,6 +1439,31 @@ class ComplianceAnalyzer:
 
 
 # ============================================================================
+# BOUNDARY ANALYZER (for BOUNDARY mode)
+# ============================================================================
+
+class BoundaryAnalyzer(ChangeAnalyzer):
+    """
+    Boundary-tolerant analyzer that reduces risk for boundary operator changes.
+    Inherits from ChangeAnalyzer but applies boundary-specific constraints.
+    """
+    
+    def analyze(
+        self,
+        old: str,
+        new: str,
+        constraints: Optional[Constraint] = None
+    ) -> Tuple[List[AnalyzerResult], int, Dict[str, Any]]:
+        """Analyze with boundary tolerance"""
+        if constraints is None:
+            constraints = Constraint(allow_boundary_change=True)
+        else:
+            constraints.allow_boundary_change = True
+        
+        return super().analyze(old, new, constraints)
+
+
+# ============================================================================
 # AI CALLS
 # ============================================================================
 
@@ -1940,6 +1993,9 @@ async def analyze_ci(request: Request):
     Accepts: {"old_code": "...", "new_code": "...", "mode": "STRICT"}
     Returns: {"risk": 60, "status": "FAIL", "findings": [...]}
     """
+    import time
+    start_time = time.time()
+    
     try:
         # Parse JSON body
         try:
@@ -1961,45 +2017,74 @@ async def analyze_ci(request: Request):
         
         # Build constraints based on mode
         if mode == "STRICT":
-            constraints = Constraint(no_behavior_change=True, allow_boundary_change=False)
+            analyzer = ChangeAnalyzer()
+            constraint = Constraint(no_behavior_change=True)
         elif mode == "BOUNDARY":
-            constraints = Constraint(no_behavior_change=False, allow_boundary_change=True)
+            analyzer = BoundaryAnalyzer()
+            constraint = Constraint(allow_boundary_flex=True)
         else:  # CONTRACT
-            constraints = Constraint(no_behavior_change=False, allow_boundary_change=False)
+            analyzer = ComplianceAnalyzer()
+            constraint = Constraint()
         
         # Handle empty old_code (first commit)
         if not old_code.strip():
-            # Use COMPLIANCE mode for first commit
-            analyzer = ComplianceAnalyzer()
-            findings, raw_risk, metadata = analyzer.analyze(new_code, "")
+            # First commit - use COMPLIANCE mode
+            if isinstance(analyzer, ComplianceAnalyzer):
+                findings, raw_risk, metadata = analyzer.analyze(new_code, "")
+            else:
+                # Use ChangeAnalyzer with empty old code
+                findings, raw_risk, metadata = analyzer.analyze("", new_code, constraint)
         else:
-            # Use CHANGE mode for diffs
-            analyzer = ChangeAnalyzer()
-            findings, raw_risk, metadata = analyzer.analyze(old_code, new_code, constraints)
+            # Normal diff analysis
+            if isinstance(analyzer, ComplianceAnalyzer):
+                # CONTRACT mode - analyze compliance
+                findings, raw_risk, metadata = analyzer.analyze(new_code, old_code)
+            else:
+                # CHANGE mode (STRICT or BOUNDARY)
+                findings, raw_risk, metadata = analyzer.analyze(old_code, new_code, constraint)
         
         # Normalize risk
-        risk = normalize_risk(raw_risk)
-        status = get_status(risk)
+        risk = max(0, min(100, int(raw_risk)))
         
-        # Build summary
+        # Convert findings to GitHub-friendly summary
         summary = []
-        if findings:
-            summary = [f.findings[0] for f in findings[:5]]
-        else:
+        for f in findings[:5]:
+            summary.append(f"{f.name}: {f.findings[0]}")
+        
+        if not summary:
             summary = ["No issues detected"]
+        
+        # Status decision
+        if risk >= 60:
+            status = "FAIL"
+            pass_flag = False
+            warn_flag = False
+            fail_flag = True
+        elif risk >= 21:
+            status = "WARN"
+            pass_flag = True
+            warn_flag = True
+            fail_flag = False
+        else:
+            status = "PASS"
+            pass_flag = True
+            warn_flag = False
+            fail_flag = False
         
         # Build response
         response = {
             "risk": risk,
+            "risk_score": risk,
             "status": status,
             "mode": mode,
             "findings_count": len(findings),
             "summary": summary,
-            "pass": status == "PASS",
-            "warn": status == "WARN",
-            "fail": status == "FAIL",
-            "metadata": metadata,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "pass": pass_flag,
+            "warn": warn_flag,
+            "fail": fail_flag,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "analysis_time_ms": int((time.time() - start_time) * 1000),
+            "metadata": metadata
         }
         
         # Log for debugging
@@ -2012,6 +2097,17 @@ async def analyze_ci(request: Request):
     except Exception as e:
         print(f"[ERROR] analyze_ci failed: {str(e)}")
         raise HTTPException(500, f"Analysis error: {str(e)}")
+
+
+@app.get("/analyze_ci")
+async def analyze_ci_health():
+    """Health check for CI endpoint"""
+    return {
+        "status": "ok",
+        "endpoint": "/analyze_ci",
+        "method": "POST only",
+        "message": "Use GitHub Actions or curl -X POST to send code"
+    }
 
 
 @app.get("/report/json/{report_id}")
@@ -2076,7 +2172,8 @@ async def health():
             },
             "ci_cd": {
                 "analyze_ci": "POST /analyze_ci - Fast analysis for GitHub Actions",
-                "health": "GET / - Health check"
+                "health": "GET /analyze_ci - Health check",
+                "root": "GET / - API documentation"
             }
         },
         "ci_cd_modes": {
@@ -2086,8 +2183,8 @@ async def health():
         },
         "risk_thresholds": {
             "PASS": "0-20 (safe to merge)",
-            "WARN": "21-50 (review recommended)",
-            "FAIL": "51-100 (merge blocked)"
+            "WARN": "21-60 (review recommended)",
+            "FAIL": "61-100 (merge blocked)"
         },
         "test_cases_verified": {
             "A_STRICT_MODE": {
@@ -2135,6 +2232,7 @@ async def startup_event():
     print("🚀 ENDPOINTS:")
     print("  • POST /analyze - Full analysis with AI")
     print("  • POST /analyze_ci - CI/CD optimized endpoint")
+    print("  • GET /analyze_ci - Health check")
     print("  • GET /report/json/{id} - Download JSON")
     print("  • GET /report/pdf/{id} - Download PDF")
     print()
