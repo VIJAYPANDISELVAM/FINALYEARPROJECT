@@ -2096,13 +2096,63 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
 
+# Add this endpoint to your existing app.py file
+# Replace the incomplete @app.post("/analyze_ci") at the end with this:
+
 @app.post("/analyze_ci")
-def analyze_ci(data: dict):
-    source_code = data["source"]
-
-    result = analyze_code(source_code)  # your existing function
-
-    return {
-        "risk": result["risk"],
-        "status": result["status"]
-    }
+async def analyze_ci(request: dict):
+    """
+    CI/CD specific endpoint for GitHub Actions integration.
+    
+    Simplified interface:
+    - Accepts old_code, new_code, mode
+    - Returns risk, status, and summary
+    - Optimized for automated decision making
+    """
+    try:
+        old_code = request.get("old_code", "")
+        new_code = request.get("new_code", "")
+        mode = request.get("mode", "CHANGE").upper()
+        
+        if not new_code.strip():
+            raise HTTPException(400, "new_code cannot be empty")
+        
+        # If old_code is empty, use COMPLIANCE mode
+        if not old_code.strip():
+            mode = "COMPLIANCE"
+            analyzer = ComplianceAnalyzer()
+            findings, raw_risk, signals = analyzer.analyze(new_code, "")
+        else:
+            mode = "CHANGE"
+            # Apply strict constraint for CI/CD
+            constraints = Constraint(
+                no_behavior_change=request.get("mode") == "STRICT",
+                allow_boundary_change=False
+            )
+            analyzer = ChangeAnalyzer()
+            findings, raw_risk, signals = analyzer.analyze(old_code, new_code, constraints)
+        
+        risk = normalize_risk(raw_risk)
+        status = pass_fail_from_risk(risk)
+        
+        # Build summary for CI/CD
+        summary = []
+        if findings:
+            summary = [f.findings[0] for f in findings[:3]]
+        
+        return {
+            "risk": risk,
+            "status": status,
+            "mode": mode,
+            "findings_count": len(findings),
+            "summary": summary,
+            "pass": risk <= 20,
+            "warn": 21 <= risk <= 50,
+            "fail": risk >= 51,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"CI analysis error: {str(e)}")
