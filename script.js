@@ -1,6 +1,4 @@
 // CRONOS - Enhanced UI Compatible Script
-// Production Configuration - Vercel + Render
-
 let lastAnalysisResult = null;
 let lastReportId = null;
 let currentMode = null;
