@@ -2095,3 +2095,14 @@ async def startup_event():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+
+@app.post("/analyze_ci")
+def analyze_ci(data: dict):
+    source_code = data["source"]
+
+    result = analyze_code(source_code)  # your existing function
+
+    return {
+        "risk": result["risk"],
+        "status": result["status"]
+    }
