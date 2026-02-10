@@ -11,45 +11,169 @@ on:
 jobs:
   cronos_check:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
+        with:
+          fetch-depth: 2  # Need at least 2 commits for diff
+      
       - name: Collect changed files
+        id: changes
         run: |
           git diff --name-only HEAD~1 HEAD > changed_files.txt
           echo "Changed files:"
           cat changed_files.txt
-
+          
+          # Count changed Python files
+          PYTHON_FILES=$(grep '\.py$' changed_files.txt | wc -l || echo "0")
+          echo "python_files=$PYTHON_FILES" >> $GITHUB_OUTPUT
+      
       - name: Extract changed code
+        id: code
         run: |
+          # Get the full diff
           CHANGED_CODE=$(git diff HEAD~1 HEAD)
+          
+          # Save to file
           echo "$CHANGED_CODE" > changed_code.txt
-
-      - name: Send code to CRONOS
+          
+          # Create JSON-safe version (escape special chars)
+          CHANGED_CODE_ESCAPED=$(echo "$CHANGED_CODE" | jq -Rs .)
+          echo "changed_code=$CHANGED_CODE_ESCAPED" >> $GITHUB_OUTPUT
+          
+          # Show snippet
+          echo "Code changes (first 500 chars):"
+          echo "$CHANGED_CODE" | head -c 500
+      
+      - name: Send code to CRONOS API
+        id: cronos
         run: |
-          curl -X POST https://final-a8su.onrender.com/analyze_ci \
-          -H "Content-Type: application/json" \
-          -d @<(jq -n --arg code "$(cat changed_code.txt)" \
-            '{ old_code: "", new_code: $code, mode: "STRICT" }') \
-          > result.json
-
+          # Create JSON payload
+          cat > payload.json <<EOF
+          {
+            "old_code": "",
+            "new_code": ${{ steps.code.outputs.changed_code }},
+            "mode": "STRICT"
+          }
+          EOF
+          
+          echo "Sending request to CRONOS..."
+          
+          # Send to CRONOS with timeout
+          HTTP_CODE=$(curl -s -w "%{http_code}" -o result.json \
+            -X POST https://final-a8su.onrender.com/analyze_ci \
+            -H "Content-Type: application/json" \
+            -d @payload.json \
+            --max-time 90)
+          
+          echo "HTTP Status: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "❌ CRONOS API Error (HTTP $HTTP_CODE)"
+            cat result.json
+            exit 1
+          fi
+      
       - name: Show CRONOS response
         run: |
-          cat result.json
-
-      - name: Read risk score and decide deployment
+          echo "=========================================="
+          echo "CRONOS Analysis Results"
+          echo "=========================================="
+          cat result.json | jq '.'
+          echo "=========================================="
+      
+      - name: Evaluate risk score and decide deployment
+        id: decision
         run: |
-          RISK=$(jq '.risk' result.json)
-
-          echo "Risk score = $RISK"
-
-          if [ "$RISK" -ge 60 ]; then
-            echo "❌ DEPLOYMENT BLOCKED BY CRONOS"
-            exit 1
-          elif [ "$RISK" -ge 21 ]; then
-            echo "⚠️ WARNING: Medium risk — manual review recommended"
-          else
-            echo "✅ SAFE TO DEPLOY"
+          # Extract risk score
+          RISK=$(jq -r '.risk' result.json)
+          STATUS=$(jq -r '.status' result.json)
+          FINDINGS=$(jq -r '.findings_count' result.json)
+          
+          echo "Risk Score: $RISK/100"
+          echo "Status: $STATUS"
+          echo "Findings: $FINDINGS"
+          echo ""
+          
+          # Show summary if available
+          if [ "$FINDINGS" -gt 0 ]; then
+            echo "Summary of issues:"
+            jq -r '.summary[]' result.json | sed 's/^/  • /'
+            echo ""
           fi
+          
+          # Decision logic
+          if [ "$RISK" -ge 60 ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "❌ DEPLOYMENT BLOCKED BY CRONOS"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Risk score ($RISK) exceeds acceptable threshold (60)"
+            echo "Status: $STATUS"
+            echo ""
+            echo "Action required: Review and fix reported issues before deploying"
+            exit 1
+            
+          elif [ "$RISK" -ge 21 ]; then
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "⚠️  WARNING: Medium Risk Detected"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Risk score: $RISK/100"
+            echo "Status: $STATUS"
+            echo ""
+            echo "Recommendation: Manual review recommended before deployment"
+            echo "Proceeding with deployment (not blocking)..."
+            
+          else
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "✅ SAFE TO DEPLOY"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Risk score: $RISK/100"
+            echo "Status: $STATUS"
+            echo ""
+            echo "All checks passed!"
+          fi
+      
+      - name: Upload CRONOS report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: cronos-analysis-report
+          path: result.json
+          retention-days: 30
+      
+      - name: Comment on PR (if pull request)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const result = JSON.parse(fs.readFileSync('result.json', 'utf8'));
+            
+            const riskEmoji = result.risk >= 60 ? '🔴' : result.risk >= 21 ? '🟡' : '🟢';
+            const statusEmoji = result.status === 'FAIL' ? '❌' : result.status === 'WARN' ? '⚠️' : '✅';
+            
+            let body = `## ${riskEmoji} CRONOS Code Analysis Report\n\n`;
+            body += `**Status:** ${statusEmoji} ${result.status}\n`;
+            body += `**Risk Score:** ${result.risk}/100\n`;
+            body += `**Mode:** ${result.mode}\n`;
+            body += `**Findings:** ${result.findings_count}\n\n`;
+            
+            if (result.findings_count > 0) {
+              body += `### Issues Detected:\n`;
+              result.summary.forEach(issue => {
+                body += `- ${issue}\n`;
+              });
+            } else {
+              body += `✅ No issues detected. Code looks good!\n`;
+            }
+            
+            body += `\n---\n`;
+            body += `*Analyzed by CRONOS v5.0.0 at ${result.timestamp}*`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
