@@ -1,7 +1,10 @@
-name: CRONOS Logic Guard
+name: CRONOS Code Guard
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
@@ -10,25 +13,43 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Collect changed files
+        run: |
+          git diff --name-only HEAD~1 HEAD > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt
+
+      - name: Extract changed code
+        run: |
+          CHANGED_CODE=$(git diff HEAD~1 HEAD)
+          echo "$CHANGED_CODE" > changed_code.txt
 
       - name: Send code to CRONOS
         run: |
           curl -X POST https://final-a8su.onrender.com/analyze_ci \
           -H "Content-Type: application/json" \
-          -d '{"source": "'"$(cat script.js)"'"}' > result.json
+          -d @<(jq -n --arg code "$(cat changed_code.txt)" \
+            '{ old_code: "", new_code: $code, mode: "STRICT" }') \
+          > result.json
 
-      - name: Read risk score
+      - name: Show CRONOS response
+        run: |
+          cat result.json
+
+      - name: Read risk score and decide deployment
         run: |
           RISK=$(jq '.risk' result.json)
+
           echo "Risk score = $RISK"
 
           if [ "$RISK" -ge 60 ]; then
-            echo "❌ BUILD FAILED — High risk detected"
+            echo "❌ DEPLOYMENT BLOCKED BY CRONOS"
             exit 1
           elif [ "$RISK" -ge 21 ]; then
-            echo "⚠️ WARNING — Medium risk detected"
+            echo "⚠️ WARNING: Medium risk — manual review recommended"
           else
             echo "✅ SAFE TO DEPLOY"
           fi
