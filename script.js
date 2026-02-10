@@ -1,4 +1,4 @@
-// CRONOS - Enhanced UI Compatible Script 5.0
+// CRONOS - Enhanced UI Compatible Script
 // Production Configuration - Vercel + Render
 
 let lastAnalysisResult = null;
