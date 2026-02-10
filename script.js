@@ -1,7 +1,7 @@
 // CRONOS - Enhanced UI Compatible Script
 // Production Configuration - Vercel + Render
 
-let lastAnalysisResult = 1;
+let lastAnalysisResult = null;
 let lastReportId = null;
 let currentMode = null;
 let analysisInProgress = false;
