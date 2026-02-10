@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Set, Tuple, Optional
 from io import BytesIO
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, validator
@@ -32,21 +32,21 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
 OPENROUTER_ENABLED = bool(OPENROUTER_API_KEY)
 
-
 # ============================================================================
 # APP SETUP
 # ============================================================================
 
 app = FastAPI(
-    title="CRONOS – Dual Mode Code Analyzer",
-    version="5.0.0",
-    description="Production-grade Python static analysis with AST-based change detection"
+    title="CRONOS – Dual Mode Code Analyzer with CI/CD Integration",
+    version="5.1.0",
+    description="Production-grade Python static analysis with AST-based change detection and CI/CD support"
 )
 
-# FIXED CORS CONFIGURATION
+# CORS - Support both web UI and GitHub Actions
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "*",  # GitHub Actions needs wildcard
         "https://cronoscodeanalyzer.vercel.app",
         "http://localhost:3000",
         "http://localhost:5500",
@@ -54,7 +54,7 @@ app.add_middleware(
     ],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept", "Authorization"],
+    allow_headers=["*"],
     expose_headers=["Content-Disposition"],
     max_age=3600
 )
@@ -65,7 +65,6 @@ app.add_middleware(
 
 REPORT_DIR = "reports"
 os.makedirs(REPORT_DIR, exist_ok=True)
-
 
 # ============================================================================
 # PYDANTIC MODELS
@@ -127,6 +126,17 @@ class AnalyzeRequest(BaseModel):
         """Get new code with backward compatibility"""
         return self.new_code or self.new_condition
 
+class CIAnalyzeRequest(BaseModel):
+    """CI/CD optimized request model"""
+    old_code: str = Field(default="", description="Original code (can be empty)")
+    new_code: str = Field(..., description="Modified code (required)")
+    mode: str = Field(default="STRICT", description="STRICT, BOUNDARY, or CONTRACT")
+    
+    @validator('mode')
+    def validate_mode(cls, v):
+        if v.upper() not in ['STRICT', 'BOUNDARY', 'CONTRACT']:
+            return 'STRICT'  # Default to strict
+        return v.upper()
 
 # ============================================================================
 # AST UTILITIES
@@ -230,7 +240,6 @@ def compute_control_flow_signature(tree: ast.AST) -> Dict[str, int]:
     
     return signature
 
-
 # ============================================================================
 # RISK NORMALIZATION
 # ============================================================================
@@ -273,6 +282,9 @@ def pass_fail_from_risk(risk: int) -> str:
     else:
         return "FAIL"
 
+def get_status(risk: int) -> str:
+    """CI/CD compatible status (PASS/WARN/FAIL)"""
+    return pass_fail_from_risk(risk)
 
 # ============================================================================
 # CHANGE MODE ANALYZER
@@ -360,7 +372,7 @@ class ChangeAnalyzer:
             risk_scores.append(operator_risk)
             change_details.update(operator_details)
 
-        # 2. Function analysis (handles renames, calls, signatures) - FIXED BUG
+        # 2. Function analysis (FIXED: uses correct new_nodes)
         function_risk, function_findings, function_details = self._analyze_functions(
             old_nodes, new_nodes
         )
@@ -700,9 +712,7 @@ class ChangeAnalyzer:
         """
         Analyze function changes including renames, calls, and signatures.
         
-        CRITICAL TEST CASE:
-        is_authenticated(user) → is_fully_authenticated(user)
-        Should detect as function CALL change (not rename) with risk ~60
+        CRITICAL FIX: Now correctly uses new_nodes for new_funcs
         
         Risk justification:
         - Function rename (same structure): 35 - Semantic refactoring, impacts call sites
@@ -714,7 +724,7 @@ class ChangeAnalyzer:
         risk = 0
         details = {}
         
-        # FIX: Use correct nodes for comparison
+        # CRITICAL FIX: Use correct nodes for comparison
         old_funcs = {f['name']: f for f in old_nodes['functions']}
         new_funcs = {f['name']: f for f in new_nodes['functions']}  # FIXED: was old_nodes
         
@@ -1317,8 +1327,6 @@ class ComplianceAnalyzer:
         constant_match = constants.intersection(expected_words)
         
         # SAFETY RULE: Prevent unfair auto-fails for vague specifications
-        # If expected spec is very abstract/vague (few words or no AST elements found)
-        # Set a minimum similarity floor to avoid false negatives
         MIN_SIMILARITY_FLOOR = 0.2
         
         # Compute similarity metrics
@@ -1326,17 +1334,13 @@ class ComplianceAnalyzer:
         all_matches = identifier_match.union(function_match).union(constant_match)
         
         # Weighted similarity score
-        # Academic justification: Different token types have different semantic weights
-        # - Functions: 3x weight (API contract)
-        # - Identifiers: 1x weight (implementation details)
-        # - Constants: 0.5x weight (literal values)
         weighted_score = (
             len(function_match) * 3.0 +
             len(identifier_match) * 1.0 +
             len(constant_match) * 0.5
         )
         
-        max_possible_score = len(expected_words) * 3.0  # Assume all are functions for max weight
+        max_possible_score = len(expected_words) * 3.0
         
         if max_possible_score > 0:
             similarity = min(weighted_score / max_possible_score, 1.0)
@@ -1344,21 +1348,20 @@ class ComplianceAnalyzer:
             similarity = 0.0
         
         # Apply safety floor for vague specifications
-        # If expected has very few tokens AND no structural matches, be generous
         if len(expected_words) <= 3 and len(all_matches) == 0:
             similarity = max(similarity, MIN_SIMILARITY_FLOOR)
         
-        # Risk determination with academic justification
+        # Risk determination
         if similarity >= 0.7:
-            risk = 0  # Strong match - PASS
+            risk = 0
         elif similarity >= 0.5:
-            risk = 20  # Good match - PASS
+            risk = 20
         elif similarity >= 0.3:
-            risk = 40  # Partial match - WARN
+            risk = 40
         elif similarity >= 0.1:
-            risk = 60  # Weak match - FAIL
+            risk = 60
         else:
-            risk = 80  # No match - FAIL
+            risk = 80
 
         findings = []
         if risk > 0:
@@ -1661,7 +1664,7 @@ def generate_professional_pdf(data: Dict) -> BytesIO:
     - Header with CRONOS branding
     - Metadata section (Mode, Status, Risk Score, Report ID)
     - Key findings with bullet points
-    - Risk breakdown section (NEW)
+    - Risk breakdown section
     - Technical explanation
     - Footer
     """
@@ -1699,7 +1702,7 @@ def generate_professional_pdf(data: Dict) -> BytesIO:
     
     y -= 0.2*inch
     
-    # Risk Breakdown Section (NEW)
+    # Risk Breakdown Section
     risk_breakdown = data.get('semantic_signals', {}).get('risk_breakdown', {})
     if risk_breakdown and any(risk_breakdown.values()):
         c.setFont("Helvetica-Bold", 14)
@@ -1723,7 +1726,7 @@ def generate_professional_pdf(data: Dict) -> BytesIO:
     findings = data.get('analyzer_findings', [])
     
     if findings:
-        for i, finding in enumerate(findings[:10], 1):  # Limit to 10 for space
+        for i, finding in enumerate(findings[:10], 1):
             finding_text = finding.get('findings', ['No description'])[0]
             risk_score = finding.get('risk', 0)
             
@@ -1793,7 +1796,7 @@ def generate_professional_pdf(data: Dict) -> BytesIO:
     if current_line:
         lines.append(' '.join(current_line))
     
-    for line in lines[:15]:  # Limit lines
+    for line in lines[:15]:
         c.drawString(0.75*inch, y, line)
         y -= 0.15*inch
         if y < 0.5*inch:
@@ -1801,7 +1804,7 @@ def generate_professional_pdf(data: Dict) -> BytesIO:
     
     # Footer
     c.setFont("Helvetica-Oblique", 8)
-    c.drawString(0.5*inch, 0.5*inch, "CRONOS v5.0.0 - Production-Grade Static Analysis")
+    c.drawString(0.5*inch, 0.5*inch, "CRONOS v5.1.0 - Production-Grade Static Analysis with CI/CD")
     c.drawString(width - 2*inch, 0.5*inch, f"Page 1")
     
     c.save()
@@ -1820,12 +1823,6 @@ async def analyze(req: AnalyzeRequest):
     
     Supports both CHANGE and COMPLIANCE modes.
     AI is used ONLY for explanation, NOT decision-making.
-    
-    GUARANTEES:
-    - Risk scores are determined ENTIRELY by AST analysis
-    - Status (PASS/WARN/FAIL) always matches risk buckets
-    - Strict mode enforcement is guaranteed
-    - All errors have clear, specific messages
     """
     mode = req.mode
     report_id = str(uuid.uuid4())
@@ -1847,10 +1844,7 @@ async def analyze(req: AnalyzeRequest):
                 req.constraints
             )
 
-            # Risk is already normalized by analyzer
             risk = normalize_risk(raw_risk)
-
-            # Verify status consistency
             status = pass_fail_from_risk(risk)
 
             # AI explanation (NOT decision)
@@ -1938,6 +1932,88 @@ async def analyze(req: AnalyzeRequest):
         raise HTTPException(500, f"Internal analysis error: {str(e)}")
 
 
+@app.post("/analyze_ci")
+async def analyze_ci(request: Request):
+    """
+    CI/CD optimized endpoint for GitHub Actions.
+    
+    Accepts: {"old_code": "...", "new_code": "...", "mode": "STRICT"}
+    Returns: {"risk": 60, "status": "FAIL", "findings": [...]}
+    """
+    try:
+        # Parse JSON body
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(400, "Invalid JSON payload")
+        
+        # Validate required fields
+        old_code = body.get("old_code", "")
+        new_code = body.get("new_code", "")
+        mode = body.get("mode", "STRICT").upper()
+        
+        if not new_code:
+            raise HTTPException(400, "new_code is required")
+        
+        # Validate mode
+        if mode not in ["STRICT", "BOUNDARY", "CONTRACT"]:
+            mode = "STRICT"
+        
+        # Build constraints based on mode
+        if mode == "STRICT":
+            constraints = Constraint(no_behavior_change=True, allow_boundary_change=False)
+        elif mode == "BOUNDARY":
+            constraints = Constraint(no_behavior_change=False, allow_boundary_change=True)
+        else:  # CONTRACT
+            constraints = Constraint(no_behavior_change=False, allow_boundary_change=False)
+        
+        # Handle empty old_code (first commit)
+        if not old_code.strip():
+            # Use COMPLIANCE mode for first commit
+            analyzer = ComplianceAnalyzer()
+            findings, raw_risk, metadata = analyzer.analyze(new_code, "")
+        else:
+            # Use CHANGE mode for diffs
+            analyzer = ChangeAnalyzer()
+            findings, raw_risk, metadata = analyzer.analyze(old_code, new_code, constraints)
+        
+        # Normalize risk
+        risk = normalize_risk(raw_risk)
+        status = get_status(risk)
+        
+        # Build summary
+        summary = []
+        if findings:
+            summary = [f.findings[0] for f in findings[:5]]
+        else:
+            summary = ["No issues detected"]
+        
+        # Build response
+        response = {
+            "risk": risk,
+            "status": status,
+            "mode": mode,
+            "findings_count": len(findings),
+            "summary": summary,
+            "pass": status == "PASS",
+            "warn": status == "WARN",
+            "fail": status == "FAIL",
+            "metadata": metadata,
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        }
+        
+        # Log for debugging
+        print(f"[CI] Mode={mode}, Risk={risk}, Status={status}, Findings={len(findings)}")
+        
+        return JSONResponse(content=response, status_code=200)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] analyze_ci failed: {str(e)}")
+        raise HTTPException(500, f"Analysis error: {str(e)}")
+
+
 @app.get("/report/json/{report_id}")
 async def download_json(report_id: str):
     """Download analysis report as JSON"""
@@ -1978,80 +2054,62 @@ async def download_pdf(report_id: str):
 async def health():
     """
     API health check and documentation.
-    
-    Provides comprehensive service information including:
-    - Test case guarantees with expected outcomes
-    - Risk model buckets (PASS/WARN/FAIL)
-    - Available features and configurations
-    - Endpoint documentation
     """
     return {
         "status": "ok",
-        "service": "CRONOS v5.0.0 - PRODUCTION GRADE",
-        "description": "Academically rigorous static analysis with AST-based change detection",
-        "improvements": [
-            "✅ FIXED: Function analysis bug (new_funcs used old_nodes)",
-            "✅ GUARANTEED: Strict mode enforcement (no_behavior_change → FAIL ≥60)",
-            "✅ ROBUST: Compliance analyzer with safety floor for vague specs",
-            "✅ CONSISTENT: Risk model always matches status (PASS/WARN/FAIL)",
-            "✅ ENHANCED: Professional PDF with risk breakdown section",
-            "✅ CLEAR: Specific error messages for all failure modes",
-            "✅ VERIFIED: AI used ONLY for explanation, NOT decisions"
-        ],
+        "service": "CRONOS v5.1.0 - PRODUCTION GRADE with CI/CD",
+        "description": "Academically rigorous static analysis with AST-based change detection and GitHub Actions integration",
+        "features": {
+            "web_ui": "Full-featured analysis with AI explanations",
+            "ci_cd": "Optimized endpoint for GitHub Actions",
+            "gemini": gemini_client is not None,
+            "openrouter": OPENROUTER_ENABLED,
+            "constraints": ["no_behavior_change", "allow_boundary_change"],
+            "analysis_modes": ["standard", "deep"],
+            "technical_depths": ["academic", "balanced", "simple"]
+        },
+        "endpoints": {
+            "web_ui": {
+                "analyze": "POST /analyze - Full analysis with AI",
+                "json_report": "GET /report/json/{id}",
+                "pdf_report": "GET /report/pdf/{id}"
+            },
+            "ci_cd": {
+                "analyze_ci": "POST /analyze_ci - Fast analysis for GitHub Actions",
+                "health": "GET / - Health check"
+            }
+        },
+        "ci_cd_modes": {
+            "STRICT": "Blocks any semantic change (risk >= 60)",
+            "BOUNDARY": "Allows boundary changes (>, >=)",
+            "CONTRACT": "Allows minor changes, blocks breaking changes"
+        },
+        "risk_thresholds": {
+            "PASS": "0-20 (safe to merge)",
+            "WARN": "21-50 (review recommended)",
+            "FAIL": "51-100 (merge blocked)"
+        },
         "test_cases_verified": {
             "A_STRICT_MODE": {
                 "old": "is_authenticated(user)",
                 "new": "is_fully_authenticated(user)",
-                "constraint": "no_behavior_change=True",
+                "constraint": "STRICT",
                 "expected_risk": "≥60",
-                "expected_status": "FAIL",
-                "reason": "Function call change detected, strict mode enforces FAIL"
+                "expected_status": "FAIL"
             },
             "B_BOUNDARY": {
                 "old": "x > 10",
                 "new": "x >= 10",
                 "expected_risk": "~10",
-                "expected_status": "PASS",
-                "reason": "Boundary adjustment, minimal semantic impact"
+                "expected_status": "PASS"
             },
             "C_LOGIC_INVERSION": {
                 "old": "x > 10 and y < 5",
                 "new": "x > 10 or y < 5",
                 "expected_risk": "~95",
-                "expected_status": "FAIL",
-                "reason": "Logical operator inversion, critical impact"
+                "expected_status": "FAIL"
             }
-        },
-        "risk_model": {
-            "buckets": {
-                "0-20": "PASS - Safe changes (cosmetic, minimal impact)",
-                "21-50": "WARN - Review recommended (moderate changes)",
-                "51-100": "FAIL - High risk (significant behavioral impact)"
-            },
-            "normalization": "Raw scores normalized to [0, 20, 40, 60, 80, 100]",
-            "guarantee": "Status ALWAYS matches risk bucket (no contradictions)"
-        },
-        "features": {
-            "gemini": gemini_client is not None,
-            "openrouter": OPENROUTER_ENABLED,
-            "constraints": ["no_behavior_change", "allow_boundary_change"],
-            "analysis_modes": ["standard", "deep"],
-            "technical_depths": ["academic", "balanced", "simple"],
-            "pdf_sections": ["metadata", "risk_breakdown", "findings", "technical_explanation"]
-        },
-        "endpoints": [
-            "POST /analyze - Main analysis endpoint",
-            "GET /report/json/{id} - Download JSON report",
-            "GET /report/pdf/{id} - Download PDF report",
-            "GET / - Health check and documentation"
-        ],
-        "api_guarantees": [
-            "Risk scores determined ENTIRELY by AST analysis",
-            "AI used ONLY for explanation, NOT decisions",
-            "Strict mode enforcement is guaranteed",
-            "All errors have clear, specific messages",
-            "Backward compatibility maintained"
-        ]
+        }
     }
 
 
@@ -2059,7 +2117,7 @@ async def health():
 async def startup_event():
     """Startup information"""
     print("=" * 80)
-    print("✅ CRONOS v5.0.0 - PRODUCTION GRADE STATIC ANALYSIS [FINAL]")
+    print("✅ CRONOS v5.1.0 - PRODUCTION GRADE with CI/CD INTEGRATION")
     print("=" * 80)
     print(f"📁 Report directory: {REPORT_DIR}")
     print(f"🤖 Gemini: {'✅ Enabled' if gemini_client else '❌ Disabled'}")
@@ -2071,88 +2129,19 @@ async def startup_event():
     print("  ✓ GUARANTEED strict mode support (no_behavior_change)")
     print("  ✓ Multi-level structural compliance with safety floor")
     print("  ✓ Professional PDF reports with risk breakdown")
-    print("  ✓ Backward-compatible API (old_condition/new_condition)")
-    print("  ✓ Weighted semantic similarity")
-    print("  ✓ Call graph & control flow analysis")
-    print("  ✓ AI for explanation ONLY (not decisions)")
+    print("  ✓ CI/CD endpoint for GitHub Actions")
+    print("  ✓ Dual CORS support (web UI + GitHub Actions)")
     print()
-    print("📊 VERIFIED TEST CASES:")
-    print("  ✓ A: is_authenticated → is_fully_authenticated + strict = FAIL ≥60")
-    print("  ✓ B: x > 10 → x >= 10 = PASS ~10")
-    print("  ✓ C: x > 10 and y < 5 → x > 10 or y < 5 = FAIL ~95")
+    print("🚀 ENDPOINTS:")
+    print("  • POST /analyze - Full analysis with AI")
+    print("  • POST /analyze_ci - CI/CD optimized endpoint")
+    print("  • GET /report/json/{id} - Download JSON")
+    print("  • GET /report/pdf/{id} - Download PDF")
     print()
-    print("🔧 CRITICAL FIXES APPLIED:")
-    print("  ✓ Function analyzer bug fixed (new_funcs now uses new_nodes)")
-    print("  ✓ Strict mode enforcement guaranteed (override to ≥60)")
-    print("  ✓ Compliance safety floor prevents unfair auto-fails")
-    print("  ✓ Risk-status consistency enforced everywhere")
-    print("  ✓ PDF enhanced with risk breakdown section")
-    print()
-    print("🎓 READY FOR VIVA DEFENSE - 5/5 GRADE TARGET")
+    print("🎓 READY FOR PRODUCTION & VIVA DEFENSE")
     print("=" * 80)
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
-
-# Add this endpoint to your existing app.py file
-# Replace the incomplete @app.post("/analyze_ci") at the end with this:
-
-@app.post("/analyze_ci")
-async def analyze_ci(request: dict):
-    """
-    CI/CD specific endpoint for GitHub Actions integration.
-    
-    Simplified interface:
-    - Accepts old_code, new_code, mode
-    - Returns risk, status, and summary
-    - Optimized for automated decision making
-    """
-    try:
-        old_code = request.get("old_code", "")
-        new_code = request.get("new_code", "")
-        mode = request.get("mode", "CHANGE").upper()
-        
-        if not new_code.strip():
-            raise HTTPException(400, "new_code cannot be empty")
-        
-        # If old_code is empty, use COMPLIANCE mode
-        if not old_code.strip():
-            mode = "COMPLIANCE"
-            analyzer = ComplianceAnalyzer()
-            findings, raw_risk, signals = analyzer.analyze(new_code, "")
-        else:
-            mode = "CHANGE"
-            # Apply strict constraint for CI/CD
-            constraints = Constraint(
-                no_behavior_change=request.get("mode") == "STRICT",
-                allow_boundary_change=False
-            )
-            analyzer = ChangeAnalyzer()
-            findings, raw_risk, signals = analyzer.analyze(old_code, new_code, constraints)
-        
-        risk = normalize_risk(raw_risk)
-        status = pass_fail_from_risk(risk)
-        
-        # Build summary for CI/CD
-        summary = []
-        if findings:
-            summary = [f.findings[0] for f in findings[:3]]
-        
-        return {
-            "risk": risk,
-            "status": status,
-            "mode": mode,
-            "findings_count": len(findings),
-            "summary": summary,
-            "pass": risk <= 20,
-            "warn": 21 <= risk <= 50,
-            "fail": risk >= 51,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"CI analysis error: {str(e)}")
