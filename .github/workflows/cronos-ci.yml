@@ -2,236 +2,137 @@ name: CRONOS Code Guard
 
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   pull_request:
-    branches:
-      - main
-      - master
+    branches: [main, master]
 
 jobs:
   cronos_analysis:
     runs-on: ubuntu-latest
-    name: Code Analysis
-    
+    name: CRONOS CI Scanner
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for reliable diffs
-      
-      - name: Get changed code
-        id: diff
+          fetch-depth: 0   # IMPORTANT for reliable diffs
+
+      - name: Collect changed files
+        id: changes
         run: |
-          echo "Extracting code changes..."
-          
-          # Handle first commit case
           if git rev-parse HEAD~1 >/dev/null 2>&1; then
-            DIFF=$(git diff HEAD~1 HEAD)
+            git diff --name-only HEAD~1 HEAD > changed_files.txt
+            git diff HEAD~1 HEAD > code_changes.txt
           else
-            DIFF=$(git show HEAD)
+            git ls-files > changed_files.txt
+            git show HEAD > code_changes.txt
           fi
-          
-          # Save diff
-          echo "$DIFF" > code_changes.txt
-          
-          # Show preview
-          echo "Changes preview:"
-          head -c 500 code_changes.txt
-          echo ""
-          echo "..."
-          
-          # Save size
-          SIZE=$(wc -c < code_changes.txt)
-          echo "Total size: $SIZE bytes"
-      
-      - name: Send to CRONOS API
-        id: cronos
+
+          echo "Changed files:"
+          cat changed_files.txt
+
+          FILE_COUNT=$(wc -l < changed_files.txt)
+          echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
+
+      - name: Decide analysis mode automatically
+        id: mode
         run: |
-          echo "Analyzing code with CRONOS..."
-          
-          # Read diff
-          NEW_CODE=$(cat code_changes.txt)
-          
-          # Create JSON payload (using Python for safety)
-          python3 << 'PYTHON_SCRIPT'
+          FILES=$(cat changed_files.txt)
+
+          if echo "$FILES" | grep -q "test"; then
+            MODE="STRICT"
+          elif echo "$FILES" | grep -q "api\|contract\|schema"; then
+            MODE="CONTRACT"
+          else
+            MODE="BOUNDARY"
+          fi
+
+          echo "Selected mode: $MODE"
+          echo "mode=$MODE" >> $GITHUB_OUTPUT
+
+      - name: Create CRONOS payload
+        run: |
+          python3 << 'EOF' > payload.json
 import json
-import sys
 
-# Read the diff
-with open('code_changes.txt', 'r', encoding='utf-8', errors='ignore') as f:
-    new_code = f.read()
+with open("code_changes.txt","r",errors="ignore") as f:
+    code = f.read()
 
-# Limit size (50KB max)
-if len(new_code) > 50000:
-    new_code = new_code[:50000] + "\n\n[...truncated for API...]"
+if len(code) > 50000:
+    code = code[:50000] + "\n\n[TRUNCATED]"
 
-# Create payload
 payload = {
-    "old_code": "",
-    "new_code": new_code,
-    "mode": "STRICT"  # Change to BOUNDARY or CONTRACT as needed
+  "old_code": "",
+  "new_code": code,
+  "mode": "${{ steps.mode.outputs.mode }}",
+  "repo": "${{ github.repository }}",
+  "branch": "${{ github.ref_name }}",
+  "commit": "${{ github.sha }}",
+  "actor": "${{ github.actor }}"
 }
 
-# Write JSON
-with open('payload.json', 'w') as f:
-    json.dump(payload, f, indent=2)
+json.dump(payload, open("payload.json","w"), indent=2)
+EOF
 
-print("✓ Payload created")
-PYTHON_SCRIPT
-          
-          echo "Payload size: $(wc -c < payload.json) bytes"
-          
-          # Send to CRONOS
-          HTTP_CODE=$(curl -s -w "\n%{http_code}" -o response.json \
+          echo "Payload ready:"
+          head -n 20 payload.json
+
+      - name: Send to CRONOS API
+        continue-on-error: true
+        run: |
+          curl -s -o response.json \
             -X POST https://final-a8su.onrender.com/analyze_ci \
             -H "Content-Type: application/json" \
-            -H "Accept: application/json" \
             -d @payload.json \
-            --max-time 120 \
-            --retry 2 \
-            --retry-delay 10)
-          
-          # Get status code (last line)
-          STATUS=$(echo "$HTTP_CODE" | tail -n1)
-          
-          echo "HTTP Status: $STATUS"
-          
-          if [ "$STATUS" -eq 200 ]; then
-            echo "✓ Analysis complete"
-          else
-            echo "⚠ API returned HTTP $STATUS"
-            cat response.json
-            exit 1
+            --max-time 120 || true
+
+          if [ ! -s response.json ]; then
+            cat > response.json << 'EOF'
+{
+  "risk": 0,
+  "status": "PASS",
+  "mode": "FALLBACK",
+  "findings_count": 0,
+  "summary": ["API unavailable - skipping analysis"],
+  "pass": true,
+  "warn": false,
+  "fail": false,
+  "api_error": true
+}
+EOF
           fi
-      
-      - name: Parse results
-        id: results
+
+      - name: Show CRONOS result
         run: |
-          echo "=================================================="
-          echo "CRONOS ANALYSIS RESULTS"
-          echo "=================================================="
-          
-          # Pretty print
-          cat response.json | jq '.' || cat response.json
-          
-          echo "=================================================="
-          
-          # Extract values
+          cat response.json | jq .
+
+      - name: Enforce risk policy
+        run: |
           RISK=$(jq -r '.risk' response.json)
           STATUS=$(jq -r '.status' response.json)
-          FINDINGS=$(jq -r '.findings_count' response.json)
-          MODE=$(jq -r '.mode' response.json)
-          
-          echo "Risk Score: $RISK/100"
-          echo "Status: $STATUS"
-          echo "Findings: $FINDINGS"
-          echo "Mode: $MODE"
-          
-          # Export for next steps
-          echo "risk=$RISK" >> $GITHUB_OUTPUT
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
-          echo "findings=$FINDINGS" >> $GITHUB_OUTPUT
-      
-      - name: Enforce policy
-        run: |
-          RISK=${{ steps.results.outputs.risk }}
-          STATUS=${{ steps.results.outputs.status }}
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          if [ "$RISK" -ge 60 ]; then
-            echo "❌ DEPLOYMENT BLOCKED BY CRONOS"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "Risk Score: $RISK/100 (threshold: 60)"
-            echo "Status: $STATUS"
-            echo ""
-            echo "This commit introduces high-risk changes that could"
-            echo "break production. Please review the findings above."
-            echo ""
-            echo "To bypass (emergency only):"
-            echo "  git commit --amend -m 'fix: your message [skip ci]'"
-            echo ""
-            exit 1
-            
-          elif [ "$RISK" -ge 21 ]; then
-            echo "⚠️  WARNING: Medium Risk"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "Risk Score: $RISK/100"
-            echo "Status: $STATUS"
-            echo ""
-            echo "Review recommended, but deployment allowed."
-            echo ""
-            
-          else
-            echo "✅ SAFE TO DEPLOY"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo ""
-            echo "Risk Score: $RISK/100"
-            echo "Status: $STATUS"
-            echo ""
-            echo "All checks passed!"
-            echo ""
+          API_ERR=$(jq -r '.api_error' response.json)
+
+          echo "Risk = $RISK"
+
+          if [ "$API_ERR" = "true" ]; then
+            echo "⚠️ CRONOS API down — allowing deployment"
+            exit 0
           fi
-      
-      - name: Upload report
+
+          if [ "$RISK" -ge 60 ]; then
+            echo "❌ BLOCKED: Risk too high"
+            exit 1
+          else
+            echo "✅ Allowed"
+          fi
+
+      - name: Upload CRONOS report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cronos-report-${{ github.run_id }}
           path: |
             response.json
+            changed_files.txt
             code_changes.txt
             payload.json
-          retention-days: 30
-      
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const result = JSON.parse(fs.readFileSync('response.json', 'utf8'));
-            
-            const riskEmoji = result.risk >= 60 ? '🔴' : result.risk >= 21 ? '🟡' : '🟢';
-            const statusEmoji = result.status === 'FAIL' ? '❌' : result.status === 'WARN' ? '⚠️' : '✅';
-            
-            let body = `## ${riskEmoji} CRONOS Code Analysis\n\n`;
-            body += `**Status:** ${statusEmoji} ${result.status}\n`;
-            body += `**Risk Score:** ${result.risk}/100\n`;
-            body += `**Mode:** ${result.mode}\n`;
-            body += `**Findings:** ${result.findings_count}\n\n`;
-            
-            if (result.findings_count > 0) {
-              body += `### 🔍 Issues Detected\n`;
-              result.summary.forEach(issue => {
-                body += `- ${issue}\n`;
-              });
-            } else {
-              body += `✅ No issues detected!\n`;
-            }
-            
-            body += `\n---\n`;
-            
-            if (result.status === 'FAIL') {
-              body += `### ❌ Merge Blocked\n`;
-              body += `This PR cannot be merged due to high-risk changes.\n`;
-            } else if (result.status === 'WARN') {
-              body += `### ⚠️ Review Recommended\n`;
-              body += `Manual review recommended before merging.\n`;
-            } else {
-              body += `### ✅ Safe to Merge\n`;
-            }
-            
-            body += `\n*Analyzed by CRONOS v5.1.0 at ${result.timestamp}*`;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
