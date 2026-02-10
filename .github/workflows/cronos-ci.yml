@@ -40,8 +40,6 @@ jobs:
       - name: Create CRONOS payload
         run: |
           python3 << 'EOF'
-import json
-
 with open("code_changes.txt", "r", errors="ignore") as f:
     new_code = f.read()
 
